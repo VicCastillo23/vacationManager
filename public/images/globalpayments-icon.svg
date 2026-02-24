@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <defs>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#60a5fa;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#2563eb;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Círculo exterior (arco) -->
+  <path d="M 50 10 A 40 40 0 0 1 85 40" fill="none" stroke="url(#iconGradient)" stroke-width="8" stroke-linecap="round"/>
+  
+  <!-- Punto superior derecho -->
+  <circle cx="85" cy="25" r="7" fill="#2563eb"/>
+  
+  <!-- Círculo interior -->
+  <circle cx="50" cy="50" r="16" fill="none" stroke="#2563eb" stroke-width="6"/>
+  
+  <!-- Base "g" -->
+  <path d="M 35 70 Q 35 85, 50 85 Q 65 85, 65 70 L 65 50" fill="none" stroke="#2563eb" stroke-width="6" stroke-linecap="round"/>
+  <line x1="50" y1="50" x2="65" y2="50" stroke="#2563eb" stroke-width="6" stroke-linecap="round"/>
+</svg>
