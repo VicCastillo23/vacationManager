@@ -1,0 +1,5 @@
+Nombre,Email,Equipo,Fecha de Ingreso,Rol,PTO Días Tomados,Vacaciones Días Tomadas
+Juan Pérez,juan.perez@example.com,Desarrollo,2023-01-15,employee,0,0
+María García,maria.garcia@example.com,Marketing,2022-06-20,manager,2,5
+Carlos López,carlos.lopez@example.com,Ventas,2021-03-10,employee,1,3
+Ana Martínez,ana.martinez@example.com,Desarrollo,2020-08-25,director,0,10

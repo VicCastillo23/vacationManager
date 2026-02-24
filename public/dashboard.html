@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Gestión de Vacaciones</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <button id="menuToggle" class="menu-toggle" style="display: none;">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+      <i class="fa-solid fa-calendar-check header-logo"></i>
+      <h1>VacationManager</h1>
+    </div>
+    <div class="header-right">
+      <span id="userInfo"><i class="fa-solid fa-user"></i> <span id="userName"></span></span>
+      <button id="logoutBtn" class="btn btn-outline"><i class="fa-solid fa-right-from-bracket"></i> <span>Salir</span></button>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav>
+        <a href="#" class="nav-item active" data-section="overview"><i class="fa-solid fa-chart-pie"></i> Resumen</a>
+        <a href="#" class="nav-item" data-section="employees" id="navEmployees"><i class="fa-solid fa-users"></i> Empleados</a>
+        <a href="#" class="nav-item" data-section="requests"><i class="fa-solid fa-list-check"></i> Solicitudes</a>
+        <a href="#" class="nav-item" data-section="new-request"><i class="fa-solid fa-plus"></i> Nueva Solicitud</a>
+        <a href="#" class="nav-item" data-section="bulk-upload" id="navBulkUpload" style="display: none;"><i class="fa-solid fa-file-excel"></i> Carga de Empleados</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Overview Section -->
+      <section id="overview" class="section active">
+        <h2>Mi Resumen</h2>
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fa-solid fa-umbrella-beach"></i></div>
+            <div class="stat-info">
+              <span class="stat-value" id="vacationDays">-</span>
+              <span class="stat-label">Días de Vacaciones Disponibles</span>
+              <small class="form-hint" id="totalVacationDays" style="display: block; margin-top: 4px;"></small>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fa-solid fa-calendar-day"></i></div>
+            <div class="stat-info">
+              <span class="stat-value" id="ptoDays">-</span>
+              <span class="stat-label">Días de PTO</span>
+              <small class="form-hint" id="totalPtoDays" style="display: block; margin-top: 4px;"></small>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fa-solid fa-clock"></i></div>
+            <div class="stat-info">
+              <span class="stat-value" id="pendingRequests">-</span>
+              <span class="stat-label">Solicitudes Pendientes</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="stat-info">
+              <span class="stat-value" id="approvedRequests">-</span>
+              <span class="stat-label">Solicitudes Aprobadas</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="info-card">
+          <h3>Mi Información</h3>
+          <div class="info-grid">
+            <div class="info-item">
+              <label>Nombre:</label>
+              <span id="infoName">-</span>
+            </div>
+            <div class="info-item">
+              <label>Email:</label>
+              <span id="infoEmail">-</span>
+            </div>
+            <div class="info-item">
+              <label>Rol:</label>
+              <span id="infoRole">-</span>
+            </div>
+            <div class="info-item">
+              <label>Equipo:</label>
+              <span id="infoTeam">-</span>
+            </div>
+            <div class="info-item">
+              <label>Fecha de contratación:</label>
+              <span id="infoHireDate">-</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Pending approvals for managers/directors -->
+        <div id="pendingApprovalsSection" class="info-card" style="display: none;">
+          <h3><i class="fa-solid fa-bell"></i> Solicitudes Pendientes de Aprobación</h3>
+          <div id="pendingApprovalsList"></div>
+        </div>
+
+        <!-- Calendar Section -->
+        <div class="info-card calendar-section">
+          <h3><i class="fa-solid fa-calendar-days"></i> Calendario de Vacaciones</h3>
+          <div class="calendar-legend">
+            <span class="legend-item"><span class="legend-dot vacation-approved"></span> Vacaciones Aprobadas</span>
+            <span class="legend-item"><span class="legend-dot vacation-pending"></span> Vacaciones Pendientes</span>
+            <span class="legend-item"><span class="legend-dot pto-approved"></span> PTO Aprobado</span>
+            <span class="legend-item"><span class="legend-dot pto-pending"></span> PTO Pendiente</span>
+            <span class="legend-item"><span class="legend-dot holiday"></span> Días Festivos</span>
+          </div>
+          <div id="calendar"></div>
+        </div>
+      </section>
+
+      <!-- Employees Section -->
+      <section id="employees" class="section">
+        <h2><i class="fa-solid fa-users"></i> Empleados</h2>
+        <div class="filters">
+          <select id="filterTeam">
+            <option value="">Todos los equipos</option>
+          </select>
+          <select id="filterRole">
+            <option value="">Todos los roles</option>
+            <option value="director">Director</option>
+            <option value="manager">Manager</option>
+            <option value="employee">Empleado</option>
+            <option value="administrator">Administrador</option>
+          </select>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Equipo</th>
+                <th>Fecha Contratación</th>
+                <th>Vacaciones</th>
+                <th>PTO</th>
+                <th id="employeeActionsHeader" style="display: none;">Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="employeesTable">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Requests Section -->
+      <section id="requests" class="section">
+        <h2><i class="fa-solid fa-list-check"></i> Solicitudes</h2>
+        <div class="filters">
+          <select id="filterStatus">
+            <option value="">Todos los estados</option>
+            <option value="pending">Pendientes</option>
+            <option value="approved">Aprobadas</option>
+            <option value="rejected">Rechazadas</option>
+          </select>
+          <select id="filterType">
+            <option value="">Todos los tipos</option>
+            <option value="vacation">Vacaciones</option>
+            <option value="pto">PTO</option>
+          </select>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Empleado</th>
+                <th>Tipo</th>
+                <th>Fecha Inicio</th>
+                <th>Fecha Fin</th>
+                <th>Días</th>
+                <th>Estado</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody id="requestsTable">
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- New Request Section -->
+      <section id="new-request" class="section">
+        <h2><i class="fa-solid fa-plus-circle"></i> Nueva Solicitud</h2>
+        <div class="form-card">
+          <form id="newRequestForm">
+            <div class="form-group">
+              <label for="requestType">Tipo de solicitud</label>
+              <select id="requestType" required>
+                <optgroup label="Días Regulares">
+                  <option value="vacation">Vacaciones</option>
+                  <option value="pto">Día Personal (PTO)</option>
+                </optgroup>
+                <optgroup label="Eventos Personales">
+                  <option value="marriage">Matrimonio (5 días)</option>
+                  <option value="maternity">Maternidad (84 días)</option>
+                  <option value="paternity">Paternidad (15 días)</option>
+                  <option value="birthday">Cumpleaños (1 día)</option>
+                </optgroup>
+                <optgroup label="Fallecimientos">
+                  <option value="death-immediate">Fallecimiento familiar directo (5 días)</option>
+                  <option value="death-family">Fallecimiento familiar (3 días)</option>
+                  <option value="pet-death">Fallecimiento mascota (1 día)</option>
+                </optgroup>
+                <optgroup label="Otros">
+                  <option value="medical-leave">Incapacidad IMSS</option>
+                  <option value="special">Permiso Especial</option>
+                </optgroup>
+              </select>
+              <small class="form-hint" id="typeInfo" style="display: block; margin-top: 8px;"></small>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label for="requestStartDate">Fecha inicio</label>
+                <input type="date" id="requestStartDate" required>
+                <small class="form-hint" style="color: #d97706;"><i class="fa-solid fa-calendar-xmark"></i> Solo días hábiles (lunes a viernes, excluyendo festivos)</small>
+              </div>
+              <div class="form-group">
+                <label for="requestEndDate">Fecha fin</label>
+                <input type="date" id="requestEndDate" required>
+                <small class="form-hint" style="color: #d97706;"><i class="fa-solid fa-calendar-xmark"></i> Solo días hábiles</small>
+              </div>
+            </div>
+            <div class="form-group">
+              <label for="requestDays">Días laborables solicitados</label>
+              <input type="number" id="requestDays" min="0" required readonly>
+              <small class="form-hint">Solo se cuentan días de lunes a viernes</small>
+            </div>
+            <div class="form-group">
+              <label for="requestComments">Comentarios (opcional)</label>
+              <textarea id="requestComments" rows="3" placeholder="Motivo de la solicitud..."></textarea>
+            </div>
+            <div class="available-days-info">
+              <p>Días disponibles: <strong><span id="availableDaysInfo">-</span></strong></p>
+            </div>
+            <button type="submit" class="btn btn-primary">Enviar Solicitud</button>
+          </form>
+        </div>
+      </section>
+
+      <!-- Bulk Upload Section (Admin Only) -->
+      <section id="bulk-upload" class="section">
+        <h2><i class="fa-solid fa-file-excel"></i> Carga Masiva de Empleados</h2>
+        
+        <div class="info-card">
+          <h3><i class="fa-solid fa-circle-info"></i> Instrucciones</h3>
+          <p>Utiliza esta herramienta para cargar o actualizar múltiples empleados desde un archivo Excel.</p>
+          <ul style="margin: 16px 0; padding-left: 24px;">
+            <li>Descarga la plantilla de Excel y complétala con la información de los empleados</li>
+            <li>Las columnas requeridas son: <strong>Nombre, Email, Equipo, Fecha de Ingreso</strong></li>
+            <li>Las columnas opcionales son: <strong>Rol, PTO Días Tomados, Vacaciones Días Tomadas</strong></li>
+            <li>Los días disponibles se calculan automáticamente: PTO = 5 - días tomados, Vacaciones = 15 - días tomados</li>
+            <li>Si el email ya existe, se actualizará el usuario; si no, se creará uno nuevo</li>
+            <li>Los nuevos usuarios recibirán la contraseña temporal: <strong>Temporal123!</strong></li>
+          </ul>
+          <a href="#" id="downloadTemplate" class="btn btn-outline" style="display: inline-block; margin-top: 8px;">
+            <i class="fa-solid fa-download"></i> Descargar Plantilla Excel
+          </a>
+        </div>
+
+        <div class="form-card">
+          <form id="bulkUploadForm">
+            <div class="form-group">
+              <label for="excelFile">Seleccionar archivo Excel</label>
+              <input type="file" id="excelFile" accept=".xlsx,.xls" required>
+              <small class="form-hint">Formatos aceptados: .xlsx, .xls (máximo 5MB)</small>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i class="fa-solid fa-upload"></i> Cargar Empleados
+            </button>
+          </form>
+        </div>
+
+        <!-- Results Section -->
+        <div id="uploadResults" class="info-card" style="display: none;">
+          <h3><i class="fa-solid fa-chart-simple"></i> Resultados de la Carga</h3>
+          <div id="uploadSummary" class="stats-grid" style="margin-bottom: 20px;"></div>
+          <div id="uploadDetails"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal personalizado -->
+  <div id="customModal" class="custom-modal">
+    <div class="custom-modal-content">
+      <div class="custom-modal-icon" id="modalIcon"></div>
+      <h3 id="modalTitle">Título</h3>
+      <p id="modalMessage">Mensaje</p>
+      <div class="custom-modal-actions" id="modalActions"></div>
+    </div>
+  </div>
+
+  <!-- Modal de edición de usuario (Admin) -->
+  <div id="editUserModal" class="custom-modal">
+    <div class="custom-modal-content" style="max-width: 600px;">
+      <div class="custom-modal-icon" style="background: #3b82f6;"><i class="fa-solid fa-user-pen"></i></div>
+      <h3>Editar Usuario</h3>
+      <form id="editUserForm" class="auth-form" style="text-align: left; margin-top: 20px;">
+        <input type="hidden" id="editUserId">
+        
+        <div class="form-group">
+          <label for="editName">Nombre completo</label>
+          <input type="text" id="editName" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="editEmail">Email</label>
+          <input type="email" id="editEmail" required>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editRole">Rol</label>
+            <select id="editRole" required>
+              <option value="employee">Empleado</option>
+              <option value="manager">Manager</option>
+              <option value="director">Director</option>
+              <option value="administrator">Administrador</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editTeam">Equipo</label>
+            <input type="text" id="editTeam" required>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="editHireDate">Fecha de contratación</label>
+          <input type="date" id="editHireDate" required>
+        </div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editVacationDays">Días de vacaciones disponibles</label>
+            <input type="number" id="editVacationDays" min="0" required>
+          </div>
+          <div class="form-group">
+            <label for="editPtoDays">Días PTO disponibles</label>
+            <input type="number" id="editPtoDays" min="0" max="5" required>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label for="editPassword">Nueva contraseña (opcional)</label>
+          <input type="password" id="editPassword" placeholder="Dejar vacío para no cambiar">
+          <small class="form-hint">Si cambias la contraseña, el usuario deberá cambiarla en su próximo login</small>
+        </div>
+        
+        <div class="custom-modal-actions" style="margin-top: 24px;">
+          <button type="button" class="btn btn-outline" onclick="closeEditUserModal()">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Guardar Cambios</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
