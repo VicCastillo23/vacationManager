@@ -871,6 +871,32 @@ function parseLocalDate(dateStr) {
   return new Date(year, month - 1, day);
 }
 
+// Helper: Calcular años de servicio desde una fecha
+function calculateYearsFromDate(hireDate) {
+  const hire = parseLocalDate(hireDate);
+  const today = new Date();
+  return Math.floor((today - hire) / (365.25 * 24 * 60 * 60 * 1000));
+}
+
+// Helper: Calcular días de vacaciones según fecha de contratación
+function calculateVacationDaysFromDate(hireDate) {
+  const yearsOfService = calculateYearsFromDate(hireDate);
+  
+  if (yearsOfService < 1) return 12;
+  if (yearsOfService === 1) return 12;
+  if (yearsOfService === 2) return 16;
+  if (yearsOfService === 3) return 18;
+  if (yearsOfService === 4) return 20;
+  if (yearsOfService === 5) return 22;
+  if (yearsOfService >= 6 && yearsOfService <= 9) return 24;
+  if (yearsOfService >= 10 && yearsOfService <= 14) return 26;
+  if (yearsOfService >= 15 && yearsOfService <= 19) return 28;
+  if (yearsOfService >= 20 && yearsOfService <= 24) return 30;
+  if (yearsOfService >= 25 && yearsOfService <= 29) return 32;
+  if (yearsOfService >= 30) return 34;
+  return 12;
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '-';
   const date = parseLocalDate(dateStr);
@@ -1115,6 +1141,9 @@ function startEditingUser(userId) {
             <div class="edit-field">
               <label>Días Vacaciones</label>
               <input type="number" id="edit_vacationDays" value="${user.vacationDays}" min="0" />
+              <small style="color: #64748b; font-size: 0.75rem; margin-top: 4px; display: block;">
+                <i class="fa-solid fa-calculator"></i> Se recalcula al cambiar fecha de contratación
+              </small>
             </div>
             <div class="edit-field">
               <label>Días PTO</label>
@@ -1140,6 +1169,39 @@ function startEditingUser(userId) {
   
   // Agregar modal al body
   document.body.insertAdjacentHTML('beforeend', modalHTML);
+  
+  // Agregar listener para recalcular días al cambiar fecha de contratación
+  const hireDateInput = document.getElementById('edit_hireDate');
+  const vacationDaysInput = document.getElementById('edit_vacationDays');
+  
+  hireDateInput.addEventListener('change', async () => {
+    if (!hireDateInput.value) return;
+    
+    // Calcular días totales según antigüedad
+    const totalDays = calculateVacationDaysFromDate(hireDateInput.value);
+    
+    // Obtener días usados de solicitudes aprobadas de vacaciones
+    const userRequests = allRequests.filter(r => 
+      r.userId === userId && 
+      r.type === 'vacation' && 
+      r.status === 'approved'
+    );
+    
+    const daysUsed = userRequests.reduce((sum, r) => sum + r.days, 0);
+    const daysAvailable = totalDays - daysUsed;
+    
+    // Actualizar el campo
+    vacationDaysInput.value = Math.max(0, daysAvailable);
+    
+    // Mostrar información al usuario
+    const years = calculateYearsFromDate(hireDateInput.value);
+    const yearsText = years === 1 ? '1 año' : `${years} años`;
+    showModal('success', 'Días Recalculados', 
+      `Según ${yearsText} de antigüedad:\n` +
+      `• Días totales: ${totalDays}\n` +
+      `• Días usados: ${daysUsed}\n` +
+      `• Días disponibles: ${daysAvailable}`);
+  });
 }
 
 function cancelEditUser() {
