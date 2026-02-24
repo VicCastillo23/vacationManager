@@ -1,14 +1,9 @@
 // ==================== AUTH.JS ====================
 // Maneja login y registro
 
-// Check if already logged in
-const currentUser = localStorage.getItem('currentUser');
-if (currentUser) {
-  const user = JSON.parse(currentUser);
-  if (!user.mustChangePassword) {
-    window.location.href = 'dashboard.html';
-  }
-}
+// Limpiar localStorage al cargar la página de login
+// (el usuario llegó aquí porque hizo logout o es la primera vez)
+localStorage.removeItem('currentUser');
 
 // Temporary user storage for password change flow
 let tempUser = null;
@@ -58,11 +53,20 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
       throw new Error(data.error);
     }
     
+    console.log('Login response:', data);
+    
     // Check if user must change password
-    if (data.user.mustChangePassword) {
-      tempUser = data.user;
+    if (data.mustChangePassword) {
+      console.log('Showing password change modal');
+      // Guardar usuario temporal para el modal
+      tempUser = {
+        id: data.userId,
+        email: data.email,
+        name: data.name
+      };
       showChangePasswordModal();
     } else {
+      console.log('Redirecting to dashboard.html');
       // Save user to localStorage and redirect
       localStorage.setItem('currentUser', JSON.stringify(data.user));
       window.location.href = 'dashboard.html';

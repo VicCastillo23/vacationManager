@@ -1140,8 +1140,8 @@ function startEditingUser(userId) {
             </div>
             <div class="edit-field">
               <label>Días Vacaciones</label>
-              <input type="number" id="edit_vacationDays" value="${user.vacationDays}" min="0" />
-              <small style="color: #64748b; font-size: 0.75rem; margin-top: 4px; display: block;">
+              <input type="text" id="edit_vacationDays" value="${user.vacationDays}" readonly style="background-color: #f1f5f9; cursor: not-allowed; color: #64748b;" />
+              <small style="color: #3b82f6; font-size: 0.75rem; margin-top: 4px; display: block;">
                 <i class="fa-solid fa-calculator"></i> Se recalcula al cambiar fecha de contratación
               </small>
             </div>

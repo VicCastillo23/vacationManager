@@ -194,6 +194,21 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ error: 'Contraseña incorrecta' });
   }
   
+  console.log(`Login: ${user.email}, mustChangePassword: ${user.mustChangePassword}`);
+  
+  // Verificar si debe cambiar contraseña
+  if (user.mustChangePassword) {
+    console.log('Sending mustChangePassword response');
+    return res.json({ 
+      mustChangePassword: true,
+      userId: user.id,
+      email: user.email,
+      name: user.name
+    });
+  }
+  
+  console.log('Sending normal user response');
+  
   // No enviar password al cliente
   const { password: _, ...userWithoutPassword } = user;
   res.json({ user: userWithoutPassword });
