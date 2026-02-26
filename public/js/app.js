@@ -1024,8 +1024,11 @@ async function handleBulkUpload(e) {
       await loadData();
       updateOverview();
       
-      showModal('success', '¡Carga Completada!', 
-        `Se procesaron ${data.summary.total} registros: ${data.summary.created} creados, ${data.summary.updated} actualizados, ${data.summary.errors} errores.`);
+      let msg = `Empleados: ${data.summary.created} creados, ${data.summary.updated} actualizados, ${data.summary.errors} errores.`;
+      if (data.summary.requestsImported > 0 || data.summary.requestsSkipped > 0) {
+        msg += ` Solicitudes: ${data.summary.requestsImported} importadas, ${data.summary.requestsSkipped} duplicadas omitidas.`;
+      }
+      showModal('success', '¡Carga Completada!', msg);
       
       // Reset form
       fileInput.value = '';
@@ -1047,12 +1050,12 @@ function displayUploadResults(data) {
   const detailsDiv = document.getElementById('uploadDetails');
   
   // Show summary stats
-  summaryDiv.innerHTML = `
+  let statsHTML = `
     <div class="stat-card">
       <div class="stat-icon"><i class="fa-solid fa-file-import"></i></div>
       <div class="stat-info">
         <span class="stat-value">${data.summary.total}</span>
-        <span class="stat-label">Total Procesados</span>
+        <span class="stat-label">Empleados Procesados</span>
       </div>
     </div>
     <div class="stat-card">
@@ -1075,8 +1078,27 @@ function displayUploadResults(data) {
         <span class="stat-value">${data.summary.errors}</span>
         <span class="stat-label">Errores</span>
       </div>
+    </div>`;
+  
+  if (data.summary.requestsImported !== undefined) {
+    statsHTML += `
+    <div class="stat-card">
+      <div class="stat-icon" style="background: #8b5cf6;"><i class="fa-solid fa-calendar-plus"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">${data.summary.requestsImported}</span>
+        <span class="stat-label">Solicitudes Importadas</span>
+      </div>
     </div>
-  `;
+    <div class="stat-card">
+      <div class="stat-icon" style="background: #f59e0b;"><i class="fa-solid fa-forward"></i></div>
+      <div class="stat-info">
+        <span class="stat-value">${data.summary.requestsSkipped}</span>
+        <span class="stat-label">Solicitudes Duplicadas</span>
+      </div>
+    </div>`;
+  }
+  
+  summaryDiv.innerHTML = statsHTML;
   
   // Show details
   let detailsHTML = '';
@@ -1100,10 +1122,19 @@ function displayUploadResults(data) {
   }
   
   if (data.details.errors.length > 0) {
-    detailsHTML += '<h4 style="color: #ef4444; margin-top: 20px;"><i class="fa-solid fa-triangle-exclamation"></i> Errores</h4>';
+    detailsHTML += '<h4 style="color: #ef4444; margin-top: 20px;"><i class="fa-solid fa-triangle-exclamation"></i> Errores Empleados</h4>';
     detailsHTML += '<ul style="margin: 8px 0; padding-left: 20px;">';
     data.details.errors.forEach(error => {
       detailsHTML += `<li>Fila ${error.row} (${error.email}): ${error.error}</li>`;
+    });
+    detailsHTML += '</ul>';
+  }
+  
+  if (data.details.requestErrors && data.details.requestErrors.length > 0) {
+    detailsHTML += '<h4 style="color: #ef4444; margin-top: 20px;"><i class="fa-solid fa-triangle-exclamation"></i> Errores Solicitudes</h4>';
+    detailsHTML += '<ul style="margin: 8px 0; padding-left: 20px;">';
+    data.details.requestErrors.forEach(error => {
+      detailsHTML += `<li>Fila ${error.row}: ${error.error}</li>`;
     });
     detailsHTML += '</ul>';
   }

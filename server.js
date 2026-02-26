@@ -270,6 +270,11 @@ app.post('/api/auth/register', async (req, res) => {
     return res.status(400).json({ error: 'El email ya está registrado' });
   }
   
+  // Solo Yocelyn Rugerio puede registrarse como director o administrador
+  if ((role === 'director' || role === 'administrator') && name !== 'Yocelyn Rugerio') {
+    return res.status(403).json({ error: 'No tienes permiso para registrarte con este rol.' });
+  }
+  
   const hashedPassword = await bcrypt.hash(password, 10);
   const newUser = {
     id: uuidv4(),
@@ -866,6 +871,96 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
       }
     }
 
+    // Procesar hoja de Solicitudes (si existe)
+    const solicitudesSheet = workbook.Sheets['Solicitudes'];
+    const requestResults = { imported: 0, skipped: 0, errors: [] };
+
+    if (solicitudesSheet) {
+      const solicitudesData = xlsx.utils.sheet_to_json(solicitudesSheet);
+
+      const typeNamesReverse = {
+        'Vacaciones': 'vacation', 'PTO': 'pto', 'Matrimonio': 'marriage',
+        'Maternidad': 'maternity', 'Paternidad': 'paternity', 'Cumpleaños': 'birthday',
+        'Fallecimiento directo': 'death-immediate', 'Fallecimiento familiar': 'death-family',
+        'Fallecimiento mascota': 'pet-death', 'Incapacidad IMSS': 'medical-leave',
+        'Permiso Especial': 'special'
+      };
+      const statusNamesReverse = {
+        'Pendiente': 'pending', 'Aprobada': 'approved', 'Rechazada': 'rejected'
+      };
+
+      for (let i = 0; i < solicitudesData.length; i++) {
+        const row = solicitudesData[i];
+        const rowNum = i + 2;
+
+        try {
+          const empleadoName = row['Empleado'];
+          const tipo = row['Tipo'];
+          let fechaInicio = row['Fecha Inicio'];
+          let fechaFin = row['Fecha Fin'];
+          const dias = parseInt(row['Días']) || 0;
+          const estado = row['Estado'];
+
+          if (!empleadoName || !tipo || !fechaInicio || !fechaFin) {
+            requestResults.errors.push({ row: rowNum, error: `Solicitud incompleta en fila ${rowNum}` });
+            continue;
+          }
+
+          // Convertir fechas Excel numéricas
+          if (typeof fechaInicio === 'number') {
+            const d = xlsx.SSF.parse_date_code(fechaInicio);
+            fechaInicio = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+          }
+          if (typeof fechaFin === 'number') {
+            const d = xlsx.SSF.parse_date_code(fechaFin);
+            fechaFin = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+          }
+
+          // Buscar usuario por nombre
+          const user = db.users.find(u => u.name === empleadoName);
+          if (!user) {
+            requestResults.errors.push({ row: rowNum, error: `Usuario "${empleadoName}" no encontrado` });
+            continue;
+          }
+
+          const type = typeNamesReverse[tipo] || tipo;
+          const status = statusNamesReverse[estado] || estado;
+
+          // Verificar si ya existe solicitud con mismas fechas para ese usuario
+          const duplicate = db.requests.find(r =>
+            r.userId === user.id &&
+            r.startDate === fechaInicio &&
+            r.endDate === fechaFin &&
+            r.type === type
+          );
+
+          if (duplicate) {
+            requestResults.skipped++;
+            continue;
+          }
+
+          db.requests.push({
+            id: uuidv4(),
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            type,
+            startDate: fechaInicio,
+            endDate: fechaFin,
+            days: dias,
+            status,
+            comments: row['Comentarios'] || 'Importado desde Excel',
+            backfill: true,
+            createdAt: new Date().toISOString()
+          });
+
+          requestResults.imported++;
+        } catch (error) {
+          requestResults.errors.push({ row: rowNum, error: error.message });
+        }
+      }
+    }
+
     // Guardar cambios
     writeDB(db);
 
@@ -875,9 +970,15 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
         total: data.length,
         created: results.created.length,
         updated: results.updated.length,
-        errors: results.errors.length
+        errors: results.errors.length,
+        requestsImported: requestResults.imported,
+        requestsSkipped: requestResults.skipped,
+        requestErrors: requestResults.errors.length
       },
-      details: results
+      details: {
+        ...results,
+        requestErrors: requestResults.errors
+      }
     });
 
   } catch (error) {
