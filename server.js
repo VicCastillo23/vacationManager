@@ -271,7 +271,8 @@ app.post('/api/auth/register', async (req, res) => {
   }
   
   // Solo Yocelyn Rugerio puede registrarse como director o administrador
-  if ((role === 'director' || role === 'administrator') && name !== 'Yocelyn Rugerio') {
+  if ((role === 'director' || role === 'administrator') &&
+      !(name === 'Yocelyn Rugerio' && email === 'yocelyn.rugerio@globalpayments.com')) {
     return res.status(403).json({ error: 'No tienes permiso para registrarte con este rol.' });
   }
   

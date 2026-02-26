@@ -115,6 +115,35 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
 // Set default date for hire date field
 document.getElementById('registerHireDate').valueAsDate = new Date();
 
+// Mostrar roles Director/Admin solo para Yocelyn Rugerio
+const ADMIN_NAME = 'Yocelyn Rugerio';
+const ADMIN_EMAIL = 'yocelyn.rugerio@globalpayments.com';
+
+function updateRoleOptions() {
+  const name = document.getElementById('registerName').value.trim();
+  const email = document.getElementById('registerEmail').value.trim().toLowerCase();
+  const roleSelect = document.getElementById('registerRole');
+  const currentValue = roleSelect.value;
+
+  const isYocelyn = name === ADMIN_NAME && email === ADMIN_EMAIL;
+
+  // Guardar opciones base
+  let options = '<option value="employee">Empleado</option><option value="manager">Manager</option>';
+  if (isYocelyn) {
+    options += '<option value="director">Director</option><option value="administrator">Administrador</option>';
+  }
+
+  roleSelect.innerHTML = options;
+
+  // Restaurar selección si sigue siendo válida
+  if ([...roleSelect.options].some(o => o.value === currentValue)) {
+    roleSelect.value = currentValue;
+  }
+}
+
+document.getElementById('registerName').addEventListener('input', updateRoleOptions);
+document.getElementById('registerEmail').addEventListener('input', updateRoleOptions);
+
 // ==================== CHANGE PASSWORD ====================
 function showChangePasswordModal() {
   document.getElementById('changePasswordModal').classList.add('active');
