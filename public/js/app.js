@@ -27,7 +27,7 @@ async function initializeApp() {
     document.getElementById('navEmployees').style.display = 'none';
   }
   
-  // Show bulk upload section only for administrators
+  // Show admin-only sections for administrators
   if (currentUser.role === 'administrator') {
     document.getElementById('navBulkUpload').style.display = 'flex';
   }
@@ -44,7 +44,7 @@ async function initializeApp() {
   // Setup form events
   setupNewRequestForm();
   
-  // Setup bulk upload (admin only)
+  // Setup admin-only features
   if (currentUser.role === 'administrator') {
     setupBulkUpload();
   }
@@ -945,6 +945,9 @@ function setupBulkUpload() {
     downloadExcelTemplate();
   });
   
+  // Export current data
+  document.getElementById('exportExcelBtn').addEventListener('click', handleExportExcel);
+  
   // Form submission
   document.getElementById('bulkUploadForm').addEventListener('submit', handleBulkUpload);
 }
@@ -1112,6 +1115,46 @@ function displayUploadResults(data) {
 function resetBulkUploadForm() {
   document.getElementById('bulkUploadForm')?.reset();
   document.getElementById('uploadResults').style.display = 'none';
+}
+
+// ==================== EXCEL EXPORT (ADMIN) ====================
+async function handleExportExcel() {
+  const btn = document.getElementById('exportExcelBtn');
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Exportando...';
+
+  try {
+    const params = new URLSearchParams({ userRole: currentUser.role });
+    const response = await fetch(`/api/admin/export-excel?${params}`);
+
+    if (!response.ok) {
+      let errorMsg = 'Error al exportar';
+      try {
+        const err = await response.json();
+        errorMsg = err.error || errorMsg;
+      } catch (e) {}
+      throw new Error(errorMsg);
+    }
+
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `vacation-manager-${new Date().toISOString().split('T')[0]}.xlsx`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showModal('success', '¡Exportación Completa!', 'El archivo Excel se ha descargado correctamente.');
+  } catch (error) {
+    console.error('Error exporting data:', error);
+    showModal('error', 'Error', error.message || 'No se pudieron exportar los datos.');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = originalText;
+  }
 }
 
 // ==================== USER EDITING (ADMIN) ====================

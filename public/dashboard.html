@@ -264,11 +264,16 @@
             <li>Las columnas opcionales son: <strong>Rol, PTO Días Tomados, Vacaciones Días Tomadas</strong></li>
             <li>Los días disponibles se calculan automáticamente: PTO = 5 - días tomados, Vacaciones = 15 - días tomados</li>
             <li>Si el email ya existe, se actualizará el usuario; si no, se creará uno nuevo</li>
-            <li>Los nuevos usuarios recibirán la contraseña temporal: <strong>Temporal123!</strong></li>
+            <li>Los nuevos usuarios recibirán la contraseña temporal: <strong>123456</strong></li>
           </ul>
-          <a href="#" id="downloadTemplate" class="btn btn-outline" style="display: inline-block; margin-top: 8px;">
-            <i class="fa-solid fa-download"></i> Descargar Plantilla Excel
-          </a>
+          <div style="margin-top: 12px; display: flex; gap: 12px; flex-wrap: wrap;">
+            <a href="#" id="downloadTemplate" class="btn btn-outline">
+              <i class="fa-solid fa-download"></i> Descargar Plantilla Vacía
+            </a>
+            <button id="exportExcelBtn" class="btn btn-primary">
+              <i class="fa-solid fa-file-export"></i> Exportar Datos Actuales a Excel
+            </button>
+          </div>
         </div>
 
         <div class="form-card">

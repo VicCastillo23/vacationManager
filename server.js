@@ -831,7 +831,7 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
           });
         } else {
           // Crear nuevo usuario con contraseña temporal
-          const tempPassword = 'Temporal123!';
+          const tempPassword = '123456';
           const hashedPassword = await bcrypt.hash(tempPassword, 10);
           
           const newUser = {
@@ -854,7 +854,7 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
             email,
             name,
             action: 'creado',
-            tempPassword: 'Temporal123!'
+            tempPassword: '123456'
           });
         }
       } catch (error) {
@@ -883,6 +883,96 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
   } catch (error) {
     console.error('Error en carga masiva:', error);
     res.status(500).json({ error: 'Error al procesar el archivo: ' + error.message });
+  }
+});
+
+// Exportar datos a Excel (admin)
+app.get('/api/admin/export-excel', (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (userRole !== 'administrator') {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const db = readDB();
+
+    // Hoja 1: Empleados (formato compatible con importación)
+    const employeesData = db.users.map(u => {
+      let vacTotal = 0, vacUsed = 0, ptoUsed = 0;
+      if (u.hireDate) {
+        const { periodStart, periodEnd } = getCurrentVacationPeriod(u.hireDate);
+        vacTotal = calculateVacationDays(u.hireDate);
+        vacUsed = db.requests
+          .filter(r => r.userId === u.id && r.type === 'vacation' &&
+            (r.status === 'approved' || r.status === 'pending') &&
+            r.startDate >= periodStart && r.startDate <= periodEnd)
+          .reduce((sum, r) => sum + r.days, 0);
+        ptoUsed = db.requests
+          .filter(r => r.userId === u.id && r.type === 'pto' &&
+            (r.status === 'approved' || r.status === 'pending') &&
+            r.startDate >= periodStart && r.startDate <= periodEnd)
+          .reduce((sum, r) => sum + r.days, 0);
+      }
+
+      return {
+        'Nombre': u.name,
+        'Email': u.email,
+        'Equipo': u.team,
+        'Fecha de Ingreso': u.hireDate || '',
+        'Rol': u.role,
+        'Vacaciones Totales': vacTotal,
+        'Vacaciones Usadas': vacUsed,
+        'PTO Usados': ptoUsed
+      };
+    });
+
+    // Hoja 2: Solicitudes
+    const typeNames = {
+      vacation: 'Vacaciones', pto: 'PTO', marriage: 'Matrimonio',
+      maternity: 'Maternidad', paternity: 'Paternidad', birthday: 'Cumpleaños',
+      'death-immediate': 'Fallecimiento directo', 'death-family': 'Fallecimiento familiar',
+      'pet-death': 'Fallecimiento mascota', 'medical-leave': 'Incapacidad IMSS',
+      special: 'Permiso Especial'
+    };
+    const statusNames = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
+
+    const requestsData = db.requests.map(r => ({
+      'Empleado': r.userName,
+      'Tipo': typeNames[r.type] || r.type,
+      'Fecha Inicio': r.startDate,
+      'Fecha Fin': r.endDate,
+      'Días': r.days,
+      'Estado': statusNames[r.status] || r.status,
+      'Comentarios': r.comments || '',
+      'Fecha Creación': r.createdAt ? r.createdAt.split('T')[0] : ''
+    }));
+
+    const wb = xlsx.utils.book_new();
+    const wsEmpleados = xlsx.utils.json_to_sheet(employeesData);
+    const wsSolicitudes = xlsx.utils.json_to_sheet(requestsData);
+
+    // Ajustar ancho de columnas
+    wsEmpleados['!cols'] = [
+      { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 15 },
+      { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 12 }
+    ];
+    wsSolicitudes['!cols'] = [
+      { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 },
+      { wch: 8 }, { wch: 12 }, { wch: 30 }, { wch: 15 }
+    ];
+
+    xlsx.utils.book_append_sheet(wb, wsEmpleados, 'Empleados');
+    xlsx.utils.book_append_sheet(wb, wsSolicitudes, 'Solicitudes');
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const filename = `vacation-manager-${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error en exportación Excel:', error);
+    res.status(500).json({ error: 'Error al exportar datos: ' + error.message });
   }
 });
 
