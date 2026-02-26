@@ -742,7 +742,7 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
 
-    if (data.length === 0) {
+    if (data.length === 0 && workbook.SheetNames.length <= 1) {
       return res.status(400).json({ error: 'El archivo Excel está vacío' });
     }
 
@@ -873,7 +873,9 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
     }
 
     // Procesar hoja de Solicitudes (si existe)
-    const solicitudesSheet = workbook.Sheets['Solicitudes'];
+    // Buscar hoja por nombre exacto o parcial
+    const solicitudesSheetName = workbook.SheetNames.find(s => s === 'Solicitudes' || s.includes('Solicitud'));
+    const solicitudesSheet = solicitudesSheetName ? workbook.Sheets[solicitudesSheetName] : null;
     const requestResults = { imported: 0, skipped: 0, errors: [] };
 
     if (solicitudesSheet) {
@@ -974,7 +976,8 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
         errors: results.errors.length,
         requestsImported: requestResults.imported,
         requestsSkipped: requestResults.skipped,
-        requestErrors: requestResults.errors.length
+        requestErrors: requestResults.errors.length,
+        solicitudesSheetFound: !!solicitudesSheet
       },
       details: {
         ...results,
