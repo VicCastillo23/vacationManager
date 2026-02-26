@@ -5,7 +5,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "start:prod": "NODE_ENV=production node server.js",
+    "start:test": "NODE_ENV=test node server.js",
+    "dev": "node server.js",
+    "clear-requests": "node scripts/clear-requests.js",
+    "clear-requests:test": "NODE_ENV=test node scripts/clear-requests.js",
+    "view-db": "node scripts/view-db.js",
+    "view-db:test": "NODE_ENV=test node scripts/view-db.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

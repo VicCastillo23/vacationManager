@@ -897,6 +897,31 @@ function calculateVacationDaysFromDate(hireDate) {
   return 12;
 }
 
+// Helper: Obtener período de aniversario actual (misma lógica que el servidor)
+function getCurrentVacationPeriodClient(hireDate) {
+  const hire = parseLocalDate(hireDate);
+  const today = new Date();
+  
+  const periodStart = new Date(hire);
+  periodStart.setFullYear(today.getFullYear());
+  
+  if (periodStart > today) {
+    periodStart.setFullYear(periodStart.getFullYear() - 1);
+  }
+  
+  const periodEnd = new Date(periodStart);
+  periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+  periodEnd.setDate(periodEnd.getDate() - 1);
+  
+  const fmt = d => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+  return { periodStart: fmt(periodStart), periodEnd: fmt(periodEnd) };
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '-';
   const date = parseLocalDate(dateStr);
@@ -1103,6 +1128,22 @@ function startEditingUser(userId) {
   
   editingUserId = userId;
   
+  // Obtener solicitudes previas aprobadas del usuario
+  const pastRequests = allRequests.filter(r => 
+    r.userId === userId && r.status === 'approved'
+  ).sort((a, b) => new Date(b.startDate) - new Date(a.startDate));
+  
+  const pastRequestsHTML = pastRequests.length > 0 
+    ? pastRequests.map(r => `
+        <div class="backfill-existing-item">
+          <span class="backfill-type-badge ${r.type}">${r.type === 'vacation' ? 'Vacaciones' : 'PTO'}</span>
+          <span>${formatDate(r.startDate)} - ${formatDate(r.endDate)}</span>
+          <span><strong>${r.days}</strong> días</span>
+          ${r.backfill ? '<span class="backfill-badge">Llenado previo</span>' : ''}
+        </div>
+      `).join('')
+    : '<p style="color: #94a3b8; font-style: italic; margin: 8px 0;">No hay solicitudes previas registradas</p>';
+  
   // Crear modal dinámicamente con mejor estructura
   const modalHTML = `
     <div class="edit-modal-backdrop" id="editModalBackdrop" onclick="cancelEditUser()">
@@ -1154,6 +1195,25 @@ function startEditingUser(userId) {
               <input type="password" id="edit_password" placeholder="Dejar vacío para no cambiar" />
             </div>
           </div>
+          
+          <!-- Sección de Llenado Previo -->
+          <div class="backfill-section">
+            <div class="backfill-header">
+              <h4><i class="fa-solid fa-clock-rotate-left"></i> Llenado Previo de Vacaciones</h4>
+              <small>Registra vacaciones o PTO que el empleado ya tomó antes de usar el sistema</small>
+            </div>
+            
+            <div class="backfill-existing">
+              <h5>Solicitudes registradas</h5>
+              ${pastRequestsHTML}
+            </div>
+            
+            <div id="backfillEntries"></div>
+            
+            <button type="button" class="backfill-add-btn" onclick="addBackfillEntry()">
+              <i class="fa-solid fa-plus"></i> Agregar vacación previa
+            </button>
+          </div>
         </div>
         <div class="edit-modal-footer">
           <button class="btn-cancel" onclick="cancelEditUser()">
@@ -1180,11 +1240,15 @@ function startEditingUser(userId) {
     // Calcular días totales según antigüedad
     const totalDays = calculateVacationDaysFromDate(hireDateInput.value);
     
-    // Obtener días usados de solicitudes aprobadas de vacaciones
+    // Obtener período actual basado en la nueva fecha de contratación
+    const { periodStart, periodEnd } = getCurrentVacationPeriodClient(hireDateInput.value);
+    
+    // Contar solo días usados en el período actual
     const userRequests = allRequests.filter(r => 
       r.userId === userId && 
       r.type === 'vacation' && 
-      r.status === 'approved'
+      (r.status === 'approved' || r.status === 'pending') &&
+      r.startDate >= periodStart && r.startDate <= periodEnd
     );
     
     const daysUsed = userRequests.reduce((sum, r) => sum + r.days, 0);
@@ -1198,8 +1262,9 @@ function startEditingUser(userId) {
     const yearsText = years === 1 ? '1 año' : `${years} años`;
     showModal('success', 'Días Recalculados', 
       `Según ${yearsText} de antigüedad:\n` +
+      `• Período: ${formatDate(periodStart)} - ${formatDate(periodEnd)}\n` +
       `• Días totales: ${totalDays}\n` +
-      `• Días usados: ${daysUsed}\n` +
+      `• Días usados (período actual): ${daysUsed}\n` +
       `• Días disponibles: ${daysAvailable}`);
   });
 }
@@ -1220,23 +1285,11 @@ async function confirmEditUser() {
   const role = document.getElementById('edit_role').value;
   const team = document.getElementById('edit_team').value;
   const hireDate = document.getElementById('edit_hireDate').value;
-  const vacationDays = parseInt(document.getElementById('edit_vacationDays').value);
-  const ptoDays = parseInt(document.getElementById('edit_ptoDays').value);
   const password = document.getElementById('edit_password').value;
   
   // Validaciones
   if (!name || !email || !team) {
     showModal('error', 'Error', 'Nombre, email y equipo son requeridos');
-    return;
-  }
-  
-  if (ptoDays < 0 || ptoDays > 5) {
-    showModal('error', 'Error', 'Los días PTO deben estar entre 0 y 5');
-    return;
-  }
-  
-  if (vacationDays < 0) {
-    showModal('error', 'Error', 'Los días de vacaciones no pueden ser negativos');
     return;
   }
   
@@ -1247,8 +1300,6 @@ async function confirmEditUser() {
       role,
       team,
       hireDate,
-      vacationDays,
-      ptoDays,
       requestingUserRole: currentUser.role
     };
     
@@ -1261,21 +1312,193 @@ async function confirmEditUser() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updateData)
     });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      cancelEditUser();
-      await loadData();
-      await loadEmployees();
-      showModal('success', '¡Usuario Actualizado!', `Los datos de ${name} han sido actualizados correctamente.`);
-    } else {
-      showModal('error', 'Error', data.error || 'No se pudo actualizar el usuario.');
+
+    const raw = await response.text();
+    let data = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      // Puede ser HTML u otro formato
     }
+
+    if (!response.ok) {
+      const msg = data.error || `No se pudo actualizar el usuario (HTTP ${response.status}).`;
+      showModal('error', 'Error', msg);
+      return;
+    }
+
+    // Enviar entradas de backfill si hay
+    const backfillEntries = getBackfillEntries();
+    let backfillMsg = '';
+
+    if (backfillEntries.length > 0) {
+      try {
+        const bfResponse = await fetch('/api/requests/backfill', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId: editingUserId,
+            userName: name,
+            entries: backfillEntries,
+            requestingUserRole: currentUser.role,
+            approverId: currentUser.id,
+            approverName: currentUser.name
+          })
+        });
+
+        const bfRaw = await bfResponse.text();
+        let bfData = {};
+        try {
+          bfData = bfRaw ? JSON.parse(bfRaw) : {};
+        } catch (e) {
+          // Puede ser HTML u otro formato
+        }
+
+        if (bfResponse.ok) {
+          backfillMsg = `\n${bfData.created} vacación(es) previa(s) registrada(s).`;
+          if (bfData.errors?.length > 0) {
+            backfillMsg += ` ${bfData.errors.length} error(es).`;
+          }
+        } else {
+          backfillMsg = `\nError al registrar vacaciones previas: ${bfData.error || `HTTP ${bfResponse.status}`}`;
+        }
+      } catch (error) {
+        console.error('Error backfill:', error);
+        backfillMsg = '\nError al registrar vacaciones previas. Inténtalo de nuevo.';
+      }
+    }
+    
+    cancelEditUser();
+    await loadData();
+    await loadEmployees();
+    showModal('success', '¡Usuario Actualizado!', `Los datos de ${name} han sido actualizados correctamente.${backfillMsg}`);
   } catch (error) {
     console.error('Error updating user:', error);
     showModal('error', 'Error', 'No se pudo actualizar el usuario. Inténtalo de nuevo.');
   }
+}
+
+// ==================== BACKFILL (LLENADO PREVIO) ====================
+let backfillCounter = 0;
+
+function addBackfillEntry() {
+  const container = document.getElementById('backfillEntries');
+  if (!container) return;
+  
+  const id = backfillCounter++;
+  const today = new Date().toISOString().split('T')[0];
+  
+  const entryHTML = `
+    <div class="backfill-entry" id="backfillEntry_${id}">
+      <div class="backfill-entry-header">
+        <span>Nueva entrada</span>
+        <button type="button" class="backfill-remove-btn" onclick="removeBackfillEntry(${id})">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+      <div class="backfill-entry-fields">
+        <div class="backfill-field">
+          <label>Tipo</label>
+          <select id="bf_type_${id}">
+            <optgroup label="🏖️ Días Regulares">
+              <option value="vacation">🏖️ Vacaciones</option>
+              <option value="pto">📅 Día Personal (PTO)</option>
+            </optgroup>
+            <optgroup label="💍 Eventos Personales">
+              <option value="marriage">💍 Matrimonio (5 días)</option>
+              <option value="maternity">👶 Maternidad (84 días)</option>
+              <option value="paternity">🍼 Paternidad (15 días)</option>
+              <option value="birthday">🎂 Cumpleaños (1 día)</option>
+            </optgroup>
+            <optgroup label="🎗️ Fallecimientos">
+              <option value="death-immediate">🎗️ Familiar directo (5 días)</option>
+              <option value="death-family">🎗️ Familiar (3 días)</option>
+              <option value="pet-death">🐾 Mascota (1 día)</option>
+            </optgroup>
+            <optgroup label="📋 Otros">
+              <option value="medical-leave">🏥 Incapacidad IMSS</option>
+              <option value="special">📄 Permiso Especial</option>
+            </optgroup>
+          </select>
+        </div>
+        <div class="backfill-field">
+          <label>Fecha inicio</label>
+          <input type="date" id="bf_start_${id}" max="${today}" onchange="calculateBackfillDays(${id})" />
+        </div>
+        <div class="backfill-field">
+          <label>Fecha fin</label>
+          <input type="date" id="bf_end_${id}" max="${today}" onchange="calculateBackfillDays(${id})" />
+        </div>
+        <div class="backfill-field">
+          <label>Días hábiles</label>
+          <input type="number" id="bf_days_${id}" min="1" readonly style="background-color: #f1f5f9;" />
+        </div>
+        <div class="backfill-field backfill-field-wide">
+          <label>Comentario (opcional)</label>
+          <input type="text" id="bf_comments_${id}" placeholder="Ej: Vacaciones de verano 2025" />
+        </div>
+      </div>
+    </div>
+  `;
+  
+  container.insertAdjacentHTML('beforeend', entryHTML);
+}
+
+function removeBackfillEntry(id) {
+  const entry = document.getElementById(`backfillEntry_${id}`);
+  if (entry) entry.remove();
+}
+
+function calculateBackfillDays(id) {
+  const startInput = document.getElementById(`bf_start_${id}`);
+  const endInput = document.getElementById(`bf_end_${id}`);
+  const daysInput = document.getElementById(`bf_days_${id}`);
+  
+  if (!startInput.value || !endInput.value) return;
+  
+  const start = parseLocalDate(startInput.value);
+  const end = parseLocalDate(endInput.value);
+  
+  if (end < start) {
+    showModal('warning', 'Fecha inválida', 'La fecha fin no puede ser anterior a la fecha inicio.');
+    endInput.value = '';
+    daysInput.value = '';
+    return;
+  }
+  
+  // Calcular días hábiles
+  let businessDays = 0;
+  const current = new Date(start);
+  while (current <= end) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) businessDays++;
+    current.setDate(current.getDate() + 1);
+  }
+  
+  daysInput.value = businessDays;
+}
+
+function getBackfillEntries() {
+  const container = document.getElementById('backfillEntries');
+  if (!container) return [];
+  
+  const entries = [];
+  const entryElements = container.querySelectorAll('.backfill-entry');
+  
+  entryElements.forEach(el => {
+    const id = el.id.replace('backfillEntry_', '');
+    const type = document.getElementById(`bf_type_${id}`)?.value;
+    const startDate = document.getElementById(`bf_start_${id}`)?.value;
+    const endDate = document.getElementById(`bf_end_${id}`)?.value;
+    const days = document.getElementById(`bf_days_${id}`)?.value;
+    const comments = document.getElementById(`bf_comments_${id}`)?.value;
+    
+    if (type && startDate && endDate && days) {
+      entries.push({ type, startDate, endDate, days: parseInt(days), comments });
+    }
+  });
+  
+  return entries;
 }
 
 // Make functions globally available
@@ -1286,3 +1509,6 @@ window.closeModal = closeModal;
 window.startEditingUser = startEditingUser;
 window.cancelEditUser = cancelEditUser;
 window.confirmEditUser = confirmEditUser;
+window.addBackfillEntry = addBackfillEntry;
+window.removeBackfillEntry = removeBackfillEntry;
+window.calculateBackfillDays = calculateBackfillDays;

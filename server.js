@@ -9,8 +9,33 @@ const multer = require('multer');
 const xlsx = require('xlsx');
 
 const app = express();
-const PORT = 3000;
-const DB_PATH = path.join(__dirname, 'data', 'db.json');
+const ENV = process.env.NODE_ENV || 'production';
+const PORT = process.env.PORT || (ENV === 'test' ? 3001 : 3000);
+const IS_VERCEL = process.env.VERCEL === '1';
+const DB_FILE = ENV === 'test' ? 'db-test.json' : 'db.json';
+
+// En Vercel el filesystem es read-only excepto /tmp
+const DB_PATH = IS_VERCEL
+  ? path.join('/tmp', DB_FILE)
+  : path.join(__dirname, 'data', DB_FILE);
+const DB_SEED_PATH = path.join(__dirname, 'data', 'db-seed.json');
+
+// Inicializar DB desde seed si no existe (primer deploy en Railway/Render/Vercel)
+if (!fs.existsSync(DB_PATH)) {
+  try {
+    // Asegurar que el directorio data/ exista
+    const dbDir = path.dirname(DB_PATH);
+    if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
+    
+    const seed = fs.existsSync(DB_SEED_PATH)
+      ? fs.readFileSync(DB_SEED_PATH, 'utf8')
+      : JSON.stringify({ users: [], requests: [] });
+    fs.writeFileSync(DB_PATH, seed, 'utf8');
+    console.log('DB inicializada desde seed en:', DB_PATH);
+  } catch (e) {
+    console.error('Error inicializando DB:', e.message);
+  }
+}
 
 // Configuración de encriptación AES-256
 const ALGORITHM = 'aes-256-cbc';
@@ -104,6 +129,28 @@ function calculateYearsOfService(hireDate) {
   const hire = new Date(hireDate);
   const today = new Date();
   return Math.floor((today - hire) / (365.25 * 24 * 60 * 60 * 1000));
+}
+
+// Helper: Obtener el período de aniversario actual del empleado
+function getCurrentVacationPeriod(hireDate) {
+  const hire = new Date(hireDate);
+  const today = new Date();
+  
+  // Calcular el aniversario más reciente
+  const periodStart = new Date(hire);
+  periodStart.setFullYear(today.getFullYear());
+  
+  // Si aún no llega el aniversario de este año, retroceder un año
+  if (periodStart > today) {
+    periodStart.setFullYear(periodStart.getFullYear() - 1);
+  }
+  
+  const periodEnd = new Date(periodStart);
+  periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+  periodEnd.setDate(periodEnd.getDate() - 1);
+  
+  const fmt = d => d.toISOString().split('T')[0];
+  return { periodStart: fmt(periodStart), periodEnd: fmt(periodEnd) };
 }
 
 // Helper: Calcular lunes cívicos
@@ -282,14 +329,32 @@ app.get('/api/users', (req, res) => {
   const db = readDB();
   
   let users = db.users.map(({ password, ...user }) => {
-    // Calcular días de vacaciones dinámicamente según antigüedad
+    // Calcular días de vacaciones dinámicamente según antigüedad y período
     const totalVacationDays = calculateVacationDays(user.hireDate);
     const yearsOfService = calculateYearsOfService(user.hireDate);
+    const { periodStart, periodEnd } = getCurrentVacationPeriod(user.hireDate);
+    
+    // Contar solo días usados en el período actual
+    const vacationUsed = db.requests
+      .filter(r => r.userId === user.id && r.type === 'vacation' &&
+        (r.status === 'approved' || r.status === 'pending') &&
+        r.startDate >= periodStart && r.startDate <= periodEnd)
+      .reduce((sum, r) => sum + r.days, 0);
+    
+    const ptoUsed = db.requests
+      .filter(r => r.userId === user.id && r.type === 'pto' &&
+        (r.status === 'approved' || r.status === 'pending') &&
+        r.startDate >= periodStart && r.startDate <= periodEnd)
+      .reduce((sum, r) => sum + r.days, 0);
     
     return {
       ...user,
+      vacationDays: totalVacationDays - vacationUsed,
+      ptoDays: 5 - ptoUsed,
       totalVacationDays,
-      yearsOfService
+      yearsOfService,
+      currentPeriodStart: periodStart,
+      currentPeriodEnd: periodEnd
     };
   });
   
@@ -322,52 +387,59 @@ app.get('/api/users/:id', (req, res) => {
 
 // Actualizar usuario (solo administradores)
 app.put('/api/users/:id', async (req, res) => {
-  const { requestingUserRole } = req.body;
-  
-  // Validar que solo administradores puedan actualizar usuarios
-  if (requestingUserRole !== 'administrator') {
-    return res.status(403).json({ error: 'Solo los administradores pueden editar usuarios' });
-  }
-  
-  const db = readDB();
-  const index = db.users.findIndex(u => u.id === req.params.id);
-  
-  if (index === -1) {
-    return res.status(404).json({ error: 'Usuario no encontrado' });
-  }
-  
-  const updates = { ...req.body };
-  delete updates.requestingUserRole; // Remover el campo de control
-  
-  // Normalizar fecha si viene en formato ISO completo
-  if (updates.hireDate && updates.hireDate.includes('T')) {
-    updates.hireDate = updates.hireDate.split('T')[0];
-  }
-  
-  // Validar email único si se está cambiando
-  if (updates.email && updates.email !== db.users[index].email) {
-    const emailExists = db.users.find(u => u.email === updates.email && u.id !== req.params.id);
-    if (emailExists) {
-      return res.status(400).json({ error: 'El email ya está en uso por otro usuario' });
+  try {
+    const { requestingUserRole } = req.body;
+    
+    // Validar que solo administradores puedan actualizar usuarios
+    if (requestingUserRole !== 'administrator') {
+      return res.status(403).json({ error: 'Solo los administradores pueden editar usuarios' });
     }
+    
+    const db = readDB();
+    const index = db.users.findIndex(u => u.id === req.params.id);
+    
+    if (index === -1) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    const updates = { ...req.body };
+    delete updates.requestingUserRole; // Remover el campo de control
+    
+    // Normalizar fecha si viene en formato ISO completo
+    if (updates.hireDate && updates.hireDate.includes('T')) {
+      updates.hireDate = updates.hireDate.split('T')[0];
+    }
+    
+    // Validar email único si se está cambiando
+    if (updates.email && updates.email !== db.users[index].email) {
+      const emailExists = db.users.find(u => u.email === updates.email && u.id !== req.params.id);
+      if (emailExists) {
+        return res.status(400).json({ error: 'El email ya está en uso por otro usuario' });
+      }
+    }
+    
+    // Si se actualiza la contraseña, hashearla
+    if (updates.password) {
+      updates.password = await bcrypt.hash(updates.password, 10);
+      updates.mustChangePassword = true;
+    }
+    
+    // Mantener campos que no deben modificarse
+    delete updates.id;
+    delete updates.createdAt;
+    delete updates.vacationDays; // Se calcula dinámicamente por período
+    delete updates.ptoDays; // Se calcula dinámicamente por período
+    
+    // Actualizar usuario
+    db.users[index] = { ...db.users[index], ...updates };
+    writeDB(db);
+    
+    const { password, ...userWithoutPassword } = db.users[index];
+    res.json(userWithoutPassword);
+  } catch (error) {
+    console.error('Error al actualizar usuario:', error);
+    res.status(500).json({ error: 'Error interno al actualizar usuario: ' + error.message });
   }
-  
-  // Si se actualiza la contraseña, hashearla
-  if (updates.password) {
-    updates.password = await bcrypt.hash(updates.password, 10);
-    updates.mustChangePassword = true;
-  }
-  
-  // Mantener campos que no deben modificarse
-  delete updates.id;
-  delete updates.createdAt;
-  
-  // Actualizar usuario
-  db.users[index] = { ...db.users[index], ...updates };
-  writeDB(db);
-  
-  const { password, ...userWithoutPassword } = db.users[index];
-  res.json(userWithoutPassword);
 });
 
 // Obtener equipos únicos
@@ -512,19 +584,8 @@ app.put('/api/requests/:id', (req, res) => {
     updatedAt: new Date().toISOString()
   };
   
-  // Si se aprueba, descontar días del usuario
-  if (status === 'approved') {
-    const request = db.requests[index];
-    const userIndex = db.users.findIndex(u => u.id === request.userId);
-    
-    if (userIndex !== -1) {
-      if (request.type === 'vacation') {
-        db.users[userIndex].vacationDays -= request.days;
-      } else {
-        db.users[userIndex].ptoDays -= request.days;
-      }
-    }
-  }
+  // Los días se calculan dinámicamente desde las solicitudes aprobadas por período,
+  // ya no se decrementan manualmente en la DB.
   
   writeDB(db);
   res.json(db.requests[index]);
@@ -545,6 +606,116 @@ app.delete('/api/requests/:id', (req, res) => {
 });
 
 // ==================== ADMIN ROUTES ====================
+
+// Llenado previo de vacaciones pasadas (backfill)
+app.post('/api/requests/backfill', (req, res) => {
+  try {
+    const { userId, userName, entries, requestingUserRole, approverId, approverName } = req.body;
+    
+    // Solo administradores pueden hacer backfill
+    if (requestingUserRole !== 'administrator') {
+      return res.status(403).json({ error: 'Solo los administradores pueden registrar vacaciones previas' });
+    }
+    
+    if (!entries || entries.length === 0) {
+      return res.status(400).json({ error: 'No se proporcionaron entradas' });
+    }
+    
+    const db = readDB();
+    const userIndex = db.users.findIndex(u => u.id === userId);
+    
+    if (userIndex === -1) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+    
+    const created = [];
+    const errors = [];
+    
+    for (let i = 0; i < entries.length; i++) {
+      const entry = entries[i];
+      
+      // Validar campos requeridos
+      if (!entry.type || !entry.startDate || !entry.endDate || !entry.days) {
+        errors.push({ index: i, error: 'Campos incompletos' });
+        continue;
+      }
+      
+      // Verificar empalmes con solicitudes existentes
+      const userRequests = db.requests.filter(r => 
+        r.userId === userId && 
+        (r.status === 'pending' || r.status === 'approved')
+      );
+      
+      const newStart = new Date(entry.startDate);
+      const newEnd = new Date(entry.endDate);
+      
+      const overlap = userRequests.find(r => {
+        const existingStart = new Date(r.startDate);
+        const existingEnd = new Date(r.endDate);
+        return (newStart <= existingEnd && newEnd >= existingStart);
+      });
+      
+      if (overlap) {
+        errors.push({ index: i, error: `Empalme con solicitud del ${overlap.startDate} al ${overlap.endDate}` });
+        continue;
+      }
+      
+      // Crear solicitud pre-aprobada
+      const newRequest = {
+        id: uuidv4(),
+        userId,
+        userName,
+        userRole: db.users[userIndex].role,
+        type: entry.type,
+        startDate: entry.startDate,
+        endDate: entry.endDate,
+        days: parseInt(entry.days),
+        status: 'approved',
+        approverId: approverId,
+        approverName: approverName,
+        comments: entry.comments || 'Llenado previo',
+        backfill: true,
+        createdAt: new Date().toISOString()
+      };
+      
+      db.requests.push(newRequest);
+      
+      // Los días se calculan dinámicamente, no se decrementan manualmente.
+      
+      created.push(newRequest);
+    }
+    
+    writeDB(db);
+    
+    // Calcular días disponibles dinámicamente para la respuesta
+    const hireDate = db.users[userIndex].hireDate;
+    const { periodStart, periodEnd } = getCurrentVacationPeriod(hireDate);
+    const totalVacDays = calculateVacationDays(hireDate);
+    const vacUsed = db.requests
+      .filter(r => r.userId === userId && r.type === 'vacation' &&
+        (r.status === 'approved' || r.status === 'pending') &&
+        r.startDate >= periodStart && r.startDate <= periodEnd)
+      .reduce((sum, r) => sum + r.days, 0);
+    const ptoUsed = db.requests
+      .filter(r => r.userId === userId && r.type === 'pto' &&
+        (r.status === 'approved' || r.status === 'pending') &&
+        r.startDate >= periodStart && r.startDate <= periodEnd)
+      .reduce((sum, r) => sum + r.days, 0);
+    
+    res.json({
+      success: true,
+      created: created.length,
+      errors,
+      user: {
+        vacationDays: totalVacDays - vacUsed,
+        ptoDays: 5 - ptoUsed
+      }
+    });
+  } catch (error) {
+    console.error('Error en backfill:', error);
+    res.status(500).json({ error: 'Error interno al registrar vacaciones previas: ' + error.message });
+  }
+});
 
 // Carga masiva de empleados desde Excel
 app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
@@ -717,19 +888,27 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
 
 // ==================== START SERVER ====================
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🏖️  Servidor de Gestión de Vacaciones iniciado`);
-  console.log(`📍 Local: http://localhost:${PORT}`);
-  
-  // Mostrar IP local para acceso en red
-  const os = require('os');
-  const interfaces = os.networkInterfaces();
-  for (const name of Object.keys(interfaces)) {
-    for (const iface of interfaces[name]) {
-      if (iface.family === 'IPv4' && !iface.internal) {
-        console.log(`🌐 Red local: http://${iface.address}:${PORT}`);
+// Solo escuchar en modo local (no en Vercel)
+if (!IS_VERCEL) {
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`\n🏖️  Servidor de Gestión de Vacaciones iniciado`);
+    console.log(`🔧 Ambiente: ${ENV.toUpperCase()}`);
+    console.log(`📁 Base de datos: ${DB_FILE}`);
+    console.log(`📍 Local: http://localhost:${PORT}`);
+    
+    // Mostrar IP local para acceso en red
+    const os = require('os');
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (iface.family === 'IPv4' && !iface.internal) {
+          console.log(`🌐 Red local: http://${iface.address}:${PORT}`);
+        }
       }
     }
-  }
-  console.log(`\n`);
-});
+    console.log(`\n`);
+  });
+}
+
+// Exportar para Vercel serverless
+module.exports = app;

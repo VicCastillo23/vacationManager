@@ -10,8 +10,10 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'db.json');
-const BACKUP_PATH = path.join(__dirname, '..', 'data', 'db.json.backup');
+const ENV = process.env.NODE_ENV || 'production';
+const DB_FILE = ENV === 'test' ? 'db-test.json' : 'db.json';
+const DB_PATH = path.join(__dirname, '..', 'data', DB_FILE);
+const BACKUP_PATH = path.join(__dirname, '..', 'data', `${DB_FILE}.backup`);
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'default-key-change-in-production').digest();
 const IV_LENGTH = 16;

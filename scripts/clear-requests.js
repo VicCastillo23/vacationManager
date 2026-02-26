@@ -11,7 +11,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const DB_PATH = path.join(__dirname, '..', 'data', 'db.json');
+const ENV = process.env.NODE_ENV || 'production';
+const DB_FILE = ENV === 'test' ? 'db-test.json' : 'db.json';
+const DB_PATH = path.join(__dirname, '..', 'data', DB_FILE);
 const ALGORITHM = 'aes-256-cbc';
 const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'default-key-change-in-production').digest();
 const IV_LENGTH = 16;
@@ -40,7 +42,7 @@ try {
   const decryptedData = decrypt(encryptedData);
   const db = JSON.parse(decryptedData);
   
-  console.log('\n=== LIMPIANDO SOLICITUDES ===\n');
+  console.log(`\n=== LIMPIANDO SOLICITUDES (${ENV.toUpperCase()}) ===\n`);
   console.log(`Solicitudes actuales: ${db.requests?.length || 0}`);
   
   // Eliminar todas las solicitudes
