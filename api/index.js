@@ -44,7 +44,12 @@ const IV_LENGTH = 16;
 
 // Middleware
 app.use(express.json());
-app.use(express.static('public'));
+const publicPath = path.join(process.cwd(), 'public');
+app.use(express.static(publicPath));
+
+app.get('/', (req, res) => {
+  res.sendFile(path.join(publicPath, 'index.html'));
+});
 
 // Configuración de multer para subida de archivos
 const upload = multer({ 
