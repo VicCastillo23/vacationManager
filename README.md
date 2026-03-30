@@ -41,6 +41,8 @@ Sistema completo de gestión de vacaciones con roles, permisos, y encriptación 
 
 - Node.js 14+
 - npm o yarn
+- MongoDB 4.4+
+- (Para AWS) EC2 o Elastic Beanstalk con Node.js
 
 ## 🛠️ Instalación
 
@@ -50,23 +52,45 @@ git clone <repository-url>
 cd vacation-manager
 ```
 
-2. Instalar dependencias
+2. Requisitos previos
+- **MongoDB**: Instalar localmente o usar MongoDB Atlas
+  - Local: `brew install mongodb-community` (Mac) o descargar desde mongodb.org
+  - Atlas: Crear cuenta en https://www.mongodb.com/cloud/atlas
+
+3. Instalar dependencias
 ```bash
 npm install
 ```
 
-3. Configurar variables de entorno
+4. Configurar variables de entorno
 ```bash
-# Crear archivo .env en la raíz del proyecto
-echo "ENCRYPTION_KEY=TuClaveSecretaAqui123!!" > .env
+cp .env.example .env
+# Editar .env con tu MONGODB_URI
 ```
 
-4. Iniciar el servidor
+ Ejemplo de `.env`:
+```bash
+ENCRYPTION_KEY=TuClaveSecretaAqui123!!
+# MONGODB_URI=mongodb://localhost:27017/vacation-manager
+# Para AWS con MongoDB Atlas:
+# MONGODB_URI=mongodb+srv://USUARIO:PASSWORD@CLUSTER.mongodb.net/vacation-manager
+NODE_ENV=production
+PORT=3000
+```
+
+5. (Opcional) Migrar datos existentes
+
+Si tienes datos en el formato JSON anterior, ejecuta el script de migración:
+```bash
+node scripts/migrate-to-mongo.js
+```
+
+6. Iniciar el servidor
 ```bash
 npm start
 ```
 
-5. Abrir en el navegador
+8. Abrir en el navegador
 ```
 http://localhost:3000
 ```
@@ -84,40 +108,35 @@ http://localhost:3000
 
 ```
 vacation-manager/
-├── server.js                 # Servidor Express con API REST
-├── .env                      # Variables de entorno (no incluir en git)
-├── package.json             # Dependencias del proyecto
-├── SECURITY.md              # Documentación de seguridad
-├── data/
-│   ├── db.json              # Base de datos encriptada
-│   └── db.json.backup       # Backup automático
-├── public/
-│   ├── index.html           # Página de login
-│   ├── dashboard.html       # Dashboard principal
+├── server.js              # Servidor Express con MongoDB
+├── .env.example           # Ejemplo de variables de entorno
+├── package.json           # Dependencias
+├── models/                # Modelos Mongoose
+│   ├── User.js
+│   └── Request.js
+├── lib/                   # Helpers
+│   ├── database.js        # Conexión MongoDB
+│   └── helpers.js         # Funciones utilitarias
+├── scripts/              # Scripts útiles
+│   └── migrate-to-mongo.js
+├── public/              # Frontend
+│   ├── index.html
+│   ├── dashboard.html
 │   ├── css/
-│   │   └── styles.css       # Estilos globales
 │   └── js/
-│       └── app.js           # Lógica del frontend
-└── scripts/
-    ├── encrypt-db.js        # Script para encriptar DB
-    └── view-db.js           # Script para ver DB (debugging)
+└── tests/              # Tests (próximamente)
+    ├── unit/
+    └── integration/
 ```
 
 ## 🔐 Seguridad
 
-La base de datos está completamente encriptada usando **AES-256-CBC**. Ver [SECURITY.md](./SECURITY.md) para más detalles.
-
-### Scripts de Seguridad
-
-Ver base de datos (desarrollo):
-```bash
-node scripts/view-db.js
-```
-
-Encriptar base de datos manualmente:
-```bash
-node scripts/encrypt-db.js
-```
+- MongoDB con schema validation (Mongoose)
+- Índices optimizados para consultas
+- Contraseñas hasheadas con bcrypt
+- Validación de roles y permisos
+- Variables de entorno en `.env`
+- ENCRYPTION_KEY reservado para compatibilidad de migración
 
 ## 📊 Tabla de Días de Vacaciones
 
@@ -191,40 +210,34 @@ Los administradores pueden cargar múltiples empleados mediante archivos Excel (
 - `GET /api/teams` - Obtener equipos
 - `GET /api/holidays` - Obtener días festivos 2026
 
-## 📝 Notas de Desarrollo
+## 🗓️ Calendario de Vacaciones
 
-- Base de datos JSON con encriptación AES-256
-- Frontend en vanilla JavaScript (sin frameworks)
-- FullCalendar para visualización de calendario
-- Font Awesome para iconos
-- Responsive design para móviles
+- Visualización mensual y semanal
+- Filtros por equipo y estado
+- Días festivos destacados en amarillo
+- Diferentes colores por tipo de solicitud
 
 ## 🐛 Solución de Problemas
 
 ### El servidor no inicia
 ```bash
-# Verificar que el puerto 3000 esté libre
+# Verificar puerto
 lsof -ti:3000 | xargs kill -9
 
-# Verificar que las dependencias estén instaladas
+# Verificar dependencias
 npm install
 
-# Verificar el archivo .env
+# Verificar MongoDB
+mongosh vacation-manager
+```
+
+### Error de conexión MongoDB
+```bash
+# Verificar que MongoDB esté corriendo
+brew services list | grep mongodb
+
+# Verificar .env tiene MONGODB_URI correcto
 cat .env
-```
-
-### No puedo ver la base de datos
-```bash
-# Usar el script de visualización
-node scripts/view-db.js
-```
-
-### Error de encriptación
-```bash
-# Verificar que ENCRYPTION_KEY esté definida
-echo $ENCRYPTION_KEY
-
-# Si cambió la clave, ver SECURITY.md para migración
 ```
 
 ## 📞 Soporte

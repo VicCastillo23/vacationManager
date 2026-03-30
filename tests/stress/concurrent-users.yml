@@ -1,0 +1,18 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 60
+      arrivalRate: 100
+      name: 'Concurrent logins'
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+scenarios:
+  - name: 'Consecutive logins'
+    flow:
+      - post:
+          url: '/api/auth/login'
+          json:
+            email: 'manager@example.com'
+            password: 'Test123!'
+      - think: 0.1

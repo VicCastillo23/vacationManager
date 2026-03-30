@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="101" failures="0" errors="0" time="25.915">
+  <testsuite name="Auth API - /api/auth/*" errors="0" failures="0" skipped="0" timestamp="2026-03-27T22:16:27" time="8.202" tests="21">
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/login - login exitoso" name="Auth API - /api/auth/* POST /api/auth/login - login exitoso" time="0.283">
+    </testcase>
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/login - usuario no encontrado" name="Auth API - /api/auth/* POST /api/auth/login - usuario no encontrado" time="0.023">
+    </testcase>
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/login - contraseña incorrecta" name="Auth API - /api/auth/* POST /api/auth/login - contraseña incorrecta" time="0.203">
+    </testcase>
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/register - registro exitoso" name="Auth API - /api/auth/* POST /api/auth/register - registro exitoso" time="0.124">
+    </testcase>
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/register - email duplicado" name="Auth API - /api/auth/* POST /api/auth/register - email duplicado" time="0.113">
+    </testcase>
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/change-password - cambio exitoso" name="Auth API - /api/auth/* POST /api/auth/change-password - cambio exitoso" time="0.207">
+    </testcase>
+    <testcase classname="Auth API - /api/auth/* POST /api/auth/change-password - contraseña inválida" name="Auth API - /api/auth/* POST /api/auth/change-password - contraseña inválida" time="0.109">
+    </testcase>
+    <testcase classname="Users API - /api/users/* GET /api/users - administrador ve todos" name="Users API - /api/users/* GET /api/users - administrador ve todos" time="0.167">
+    </testcase>
+    <testcase classname="Users API - /api/users/* GET /api/users - manager ve equipo propio + sí mismo" name="Users API - /api/users/* GET /api/users - manager ve equipo propio + sí mismo" time="0.158">
+    </testcase>
+    <testcase classname="Users API - /api/users/* GET /api/users - empleado ve solo su info" name="Users API - /api/users/* GET /api/users - empleado ve solo su info" time="0.158">
+    </testcase>
+    <testcase classname="Users API - /api/users/* GET /api/users/:id - obtener usuario específico" name="Users API - /api/users/* GET /api/users/:id - obtener usuario específico" time="0.132">
+    </testcase>
+    <testcase classname="Users API - /api/users/* GET /api/users/:id - usuario no encontrado" name="Users API - /api/users/* GET /api/users/:id - usuario no encontrado" time="0.12">
+    </testcase>
+    <testcase classname="Users API - /api/users/* GET /api/teams - obtener equipos únicos" name="Users API - /api/users/* GET /api/teams - obtener equipos únicos" time="0.126">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* POST /api/requests - crear solicitud exitosa" name="Requests API - /api/requests/* POST /api/requests - crear solicitud exitosa" time="0.146">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* POST /api/requests - anticipación insuficiente" name="Requests API - /api/requests/* POST /api/requests - anticipación insuficiente" time="0.115">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* POST /api/requests - PTO más de 2 días" name="Requests API - /api/requests/* POST /api/requests - PTO más de 2 días" time="0.116">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* GET /api/requests - empleado ve solo sus solicitudes" name="Requests API - /api/requests/* GET /api/requests - empleado ve solo sus solicitudes" time="0.122">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* GET /api/requests - administrador ve todas" name="Requests API - /api/requests/* GET /api/requests - administrador ve todas" time="0.13">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* PUT /api/requests/:id - aprobar solicitud" name="Requests API - /api/requests/* PUT /api/requests/:id - aprobar solicitud" time="0.123">
+    </testcase>
+    <testcase classname="Requests API - /api/requests/* DELETE /api/requests/:id - eliminar solicitud" name="Requests API - /api/requests/* DELETE /api/requests/:id - eliminar solicitud" time="0.124">
+    </testcase>
+    <testcase classname="Other API - /api/holidays GET /api/holidays - retorna días festivos 2026" name="Other API - /api/holidays GET /api/holidays - retorna días festivos 2026" time="0.013">
+    </testcase>
+  </testsuite>
+  <testsuite name="Flujo Completo Admin" errors="0" failures="0" skipped="0" timestamp="2026-03-27T22:16:35" time="5.972" tests="6">
+    <testcase classname="Flujo Completo Admin Login de admin" name="Flujo Completo Admin Login de admin" time="0.257">
+    </testcase>
+    <testcase classname="Flujo Completo Admin Ver todos los usuarios" name="Flujo Completo Admin Ver todos los usuarios" time="0.32">
+    </testcase>
+    <testcase classname="Flujo Completo Admin Ver todas las solicitudes de todo el sistema" name="Flujo Completo Admin Ver todas las solicitudes de todo el sistema" time="0.303">
+    </testcase>
+    <testcase classname="Flujo Completo Admin Aprobar cualquier solicitud del sistema" name="Flujo Completo Admin Aprobar cualquier solicitud del sistema" time="0.212">
+    </testcase>
+    <testcase classname="Flujo Completo Admin Crear nuevo usuario" name="Flujo Completo Admin Crear nuevo usuario" time="0.213">
+    </testcase>
+    <testcase classname="Flujo Completo Admin Ver estadísticas globales" name="Flujo Completo Admin Ver estadísticas globales" time="0.214">
+    </testcase>
+  </testsuite>
+  <testsuite name="Flujo Completo Manager" errors="0" failures="0" skipped="0" timestamp="2026-03-27T22:16:41" time="5.5" tests="4">
+    <testcase classname="Flujo Completo Manager Login de manager" name="Flujo Completo Manager Login de manager" time="0.218">
+    </testcase>
+    <testcase classname="Flujo Completo Manager Ver solicitudes del equipo" name="Flujo Completo Manager Ver solicitudes del equipo" time="0.401">
+    </testcase>
+    <testcase classname="Flujo Completo Manager Aprobar solicitud de empleado" name="Flujo Completo Manager Aprobar solicitud de empleado" time="0.304">
+    </testcase>
+    <testcase classname="Flujo Completo Manager Rechazar solicitud" name="Flujo Completo Manager Rechazar solicitud" time="0.328">
+    </testcase>
+  </testsuite>
+  <testsuite name="Flujo Completo Empleado" errors="0" failures="0" skipped="0" timestamp="2026-03-27T22:16:46" time="5.851" tests="8">
+    <testcase classname="Flujo Completo Empleado Paso 2: Login exitoso" name="Flujo Completo Empleado Paso 2: Login exitoso" time="0.222">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Paso 3: Ver días disponibles" name="Flujo Completo Empleado Paso 3: Ver días disponibles" time="0.281">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Paso 4: Crear solicitud de vacaciones" name="Flujo Completo Empleado Paso 4: Crear solicitud de vacaciones" time="0.203">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Paso 5: Ver solicitud en lista" name="Flujo Completo Empleado Paso 5: Ver solicitud en lista" time="0.199">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Baseflow completo: Login -&gt; Ver días -&gt; Crear solicitud -&gt; Ver lista" name="Flujo Completo Empleado Baseflow completo: Login -&gt; Ver días -&gt; Crear solicitud -&gt; Ver lista" time="0.242">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Error: Intentar crear solicitud sin anticipación" name="Flujo Completo Empleado Error: Intentar crear solicitud sin anticipación" time="0.105">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Error: PTO con más de 2 días" name="Flujo Completo Empleado Error: PTO con más de 2 días" time="0.195">
+    </testcase>
+    <testcase classname="Flujo Completo Empleado Ver días después de crear solicitud" name="Flujo Completo Empleado Ver días después de crear solicitud" time="0.129">
+    </testcase>
+  </testsuite>
+  <testsuite name="User Model Schema" errors="0" failures="0" skipped="0" timestamp="2026-03-27T22:16:52" time="0.12" tests="27">
+    <testcase classname="User Model Schema Email field - required, unique, string" name="User Model Schema Email field - required, unique, string" time="0.002">
+    </testcase>
+    <testcase classname="User Model Schema Password field - required, string" name="User Model Schema Password field - required, string" time="0.001">
+    </testcase>
+    <testcase classname="User Model Schema Role enum - valid values" name="User Model Schema Role enum - valid values" time="0.001">
+    </testcase>
+    <testcase classname="User Model Schema Team field - string, default" name="User Model Schema Team field - string, default" time="0.001">
+    </testcase>
+    <testcase classname="User Model Schema ManagerId field - string, nullable" name="User Model Schema ManagerId field - string, nullable" time="0.001">
+    </testcase>
+    <testcase classname="User Model Schema HireDate - Date, required" name="User Model Schema HireDate - Date, required" time="0.001">
+    </testcase>
+    <testcase classname="User Model Schema MustChangePassword - Boolean, default false" name="User Model Schema MustChangePassword - Boolean, default false" time="0">
+    </testcase>
+    <testcase classname="User Model Schema Virtual id field" name="User Model Schema Virtual id field" time="0">
+    </testcase>
+    <testcase classname="User Model Schema toJSON excludes password" name="User Model Schema toJSON excludes password" time="0.002">
+    </testcase>
+    <testcase classname="User Model Schema Indexes defined" name="User Model Schema Indexes defined" time="0">
+    </testcase>
+    <testcase classname="User Model Schema Model name is User" name="User Model Schema Model name is User" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema UserId - ObjectId reference to User" name="Request Model Schema UserId - ObjectId reference to User" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema UserName - required string" name="Request Model Schema UserName - required string" time="0">
+    </testcase>
+    <testcase classname="Request Model Schema UserRole - enum valid values" name="Request Model Schema UserRole - enum valid values" time="0">
+    </testcase>
+    <testcase classname="Request Model Schema Type - enum with all absence types" name="Request Model Schema Type - enum with all absence types" time="0.002">
+    </testcase>
+    <testcase classname="Request Model Schema StartDate - Date, required" name="Request Model Schema StartDate - Date, required" time="0">
+    </testcase>
+    <testcase classname="Request Model Schema EndDate - Date, required" name="Request Model Schema EndDate - Date, required" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Days - Number, min 1" name="Request Model Schema Days - Number, min 1" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Status - enum, default pending" name="Request Model Schema Status - enum, default pending" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema ApproverId - ObjectId reference, nullable" name="Request Model Schema ApproverId - ObjectId reference, nullable" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema ApproverName - String, nullable" name="Request Model Schema ApproverName - String, nullable" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Comments - String, default empty" name="Request Model Schema Comments - String, default empty" time="0">
+    </testcase>
+    <testcase classname="Request Model Schema Backfill - Boolean, default false" name="Request Model Schema Backfill - Boolean, default false" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Virtual id field" name="Request Model Schema Virtual id field" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Timestamps enabled" name="Request Model Schema Timestamps enabled" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Indexes defined" name="Request Model Schema Indexes defined" time="0.001">
+    </testcase>
+    <testcase classname="Request Model Schema Model name is Request" name="Request Model Schema Model name is Request" time="0">
+    </testcase>
+  </testsuite>
+  <testsuite name="calculateVacationDays" errors="0" failures="0" skipped="0" timestamp="2026-03-27T22:16:52" time="0.063" tests="35">
+    <testcase classname="calculateVacationDays Menos de 1 año: 12 días" name="calculateVacationDays Menos de 1 año: 12 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 1 año exacto: 12 días" name="calculateVacationDays 1 año exacto: 12 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 2 años: 16 días" name="calculateVacationDays 2 años: 16 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 3 años: 18 días" name="calculateVacationDays 3 años: 18 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 4 años: 20 días" name="calculateVacationDays 4 años: 20 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 5 años: 22 días" name="calculateVacationDays 5 años: 22 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 6-9 años: 24 días" name="calculateVacationDays 6-9 años: 24 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 10-14 años: 26 días" name="calculateVacationDays 10-14 años: 26 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 15-19 años: 28 días" name="calculateVacationDays 15-19 años: 28 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 20-24 años: 30 días" name="calculateVacationDays 20-24 años: 30 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 25-29 años: 32 días" name="calculateVacationDays 25-29 años: 32 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateVacationDays 30+ años: 34 días" name="calculateVacationDays 30+ años: 34 días" time="0.001">
+    </testcase>
+    <testcase classname="calculateYearsOfService 0-1 año" name="calculateYearsOfService 0-1 año" time="0.001">
+    </testcase>
+    <testcase classname="calculateYearsOfService 1-5 años" name="calculateYearsOfService 1-5 años" time="0.001">
+    </testcase>
+    <testcase classname="calculateYearsOfService 10-30 años" name="calculateYearsOfService 10-30 años" time="0.001">
+    </testcase>
+    <testcase classname="getCurrentVacationPeriod Contrato hace 1 año" name="getCurrentVacationPeriod Contrato hace 1 año" time="0.001">
+    </testcase>
+    <testcase classname="getCurrentVacationPeriod Contrato hace 2 años" name="getCurrentVacationPeriod Contrato hace 2 años" time="0.001">
+    </testcase>
+    <testcase classname="getNthWeekdayOfMonth Primer lunes de enero 2026" name="getNthWeekdayOfMonth Primer lunes de enero 2026" time="0.001">
+    </testcase>
+    <testcase classname="getNthWeekdayOfMonth Tercer lunes de marzo 2026" name="getNthWeekdayOfMonth Tercer lunes de marzo 2026" time="0.001">
+    </testcase>
+    <testcase classname="getNthWeekdayOfMonth Tercer lunes de noviembre 2026" name="getNthWeekdayOfMonth Tercer lunes de noviembre 2026" time="0.001">
+    </testcase>
+    <testcase classname="getEasterDates Calcular Semana Santa 2026" name="getEasterDates Calcular Semana Santa 2026" time="0.001">
+    </testcase>
+    <testcase classname="getEasterDates Calcular Semana Santa 2025" name="getEasterDates Calcular Semana Santa 2025" time="0.002">
+    </testcase>
+    <testcase classname="getEasterDates Calcular Semana Santa 2024" name="getEasterDates Calcular Semana Santa 2024" time="0.001">
+    </testcase>
+    <testcase classname="getEasterDates Calcular Semana Santa 2027" name="getEasterDates Calcular Semana Santa 2027" time="0.001">
+    </testcase>
+    <testcase classname="getMexicanHolidays2026 Retornar 11 días festivos" name="getMexicanHolidays2026 Retornar 11 días festivos" time="0.001">
+    </testcase>
+    <testcase classname="getMexicanHolidays2026 Incluir días festivos fijos" name="getMexicanHolidays2026 Incluir días festivos fijos" time="0.001">
+    </testcase>
+    <testcase classname="getMexicanHolidays2026 Incluir días móviles calculados" name="getMexicanHolidays2026 Incluir días móviles calculados" time="0.001">
+    </testcase>
+    <testcase classname="isHoliday Días festivos fijos reconocidos" name="isHoliday Días festivos fijos reconocidos" time="0.001">
+    </testcase>
+    <testcase classname="isHoliday Día normal no es festivo" name="isHoliday Día normal no es festivo" time="0.001">
+    </testcase>
+    <testcase classname="isHoliday Días festivos móviles reconocidos" name="isHoliday Días festivos móviles reconocidos" time="0.001">
+    </testcase>
+    <testcase classname="getHolidayName Nombres de días festivos fijos" name="getHolidayName Nombres de días festivos fijos" time="0.001">
+    </testcase>
+    <testcase classname="getHolidayName Nombres de días festivos móviles" name="getHolidayName Nombres de días festivos móviles" time="0.001">
+    </testcase>
+    <testcase classname="getHolidayName Nombres de Semana Santa" name="getHolidayName Nombres de Semana Santa" time="0.001">
+    </testcase>
+    <testcase classname="getHolidayName Nombres de días normales es null" name="getHolidayName Nombres de días normales es null" time="0.001">
+    </testcase>
+    <testcase classname="getHolidayName Otros días festivos" name="getHolidayName Otros días festivos" time="0.001">
+    </testcase>
+  </testsuite>
+</testsuites>

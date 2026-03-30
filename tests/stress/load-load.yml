@@ -1,0 +1,61 @@
+config:
+  target: 'http://localhost:3000'
+  phases:
+    - duration: 300
+      arrivalRate: 50
+      name: 'Warm up'
+    - duration: 600
+      arrivalRate: 100
+      name: 'Sustained load'
+  defaults:
+    headers:
+      Content-Type: 'application/json'
+scenarios:
+  - name: 'Login and view requests'
+    flow:
+      - post:
+          url: '/api/auth/login'
+          json:
+            email: 'manager@example.com'
+            password: 'Test123!'
+          capture:
+            - json: '$.user.id'
+              as: 'userId'
+      - get:
+          url: '/api/requests'
+          qs:
+            userId: '{{ userId }}'
+            role: 'manager'
+            team: 'Engineering'
+      - think: 1
+      - get:
+          url: '/api/users'
+          qs:
+            userId: '{{ userId }}'
+            role: 'manager'
+  - name: 'Create requests'
+    flow:
+      - post:
+          url: '/api/auth/login'
+          json:
+            email: 'user@example.com'
+            password: 'Test123!'
+          capture:
+            - json: '$.user.id'
+              as: 'userId'
+      - think: 0.5
+      - loop:
+          count: 5
+          flow:
+            - post:
+                url: '/api/requests'
+                json:
+                  userId: '{{ userId }}'
+                  userName: 'Test User'
+                  userRole: 'employee'
+                  type: 'vacation'
+                  startDate: '2026-04-01'
+                  endDate: '2026-04-03'
+                  days: 3
+                  reason: 'Test vacation'
+            - think: 0.2

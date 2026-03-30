@@ -11,14 +11,29 @@
     "clear-requests": "node scripts/clear-requests.js",
     "clear-requests:test": "NODE_ENV=test node scripts/clear-requests.js",
     "view-db": "node scripts/view-db.js",
-    "view-db:test": "NODE_ENV=test node scripts/view-db.js"
+    "view-db:test": "NODE_ENV=test node scripts/view-db.js",
+    "test": "NODE_ENV=test jest",
+    "test:unit": "NODE_ENV=test npx jest tests/unit",
+    "test:integration": "NODE_ENV=test npx jest tests/integration",
+    "test:functional": "NODE_ENV=test npx jest tests/functional",
+    "test:coverage": "NODE_ENV=test jest --coverage",
+    "test:stress": "artillery run tests/stress/load.yml"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
     "dotenv": "^17.3.1",
     "express": "^4.18.2",
+    "mongoose": "^9.3.3",
     "multer": "^2.0.2",
     "uuid": "^9.0.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.3.0",
+    "artillery": "^2.0.30",
+    "jest": "^30.3.0",
+    "jest-junit": "^16.0.0",
+    "mongodb-memory-server": "^11.0.1",
+    "supertest": "^7.2.2"
   }
 }

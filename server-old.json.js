@@ -44,12 +44,7 @@ const IV_LENGTH = 16;
 
 // Middleware
 app.use(express.json());
-const publicPath = path.join(process.cwd(), 'public');
-app.use(express.static(publicPath));
-
-app.get('/', (req, res) => {
-  res.sendFile(path.join(publicPath, 'index.html'));
-});
+app.use(express.static('public'));
 
 // Configuración de multer para subida de archivos
 const upload = multer({ 
@@ -273,6 +268,12 @@ app.post('/api/auth/register', async (req, res) => {
   
   if (db.users.find(u => u.email === email)) {
     return res.status(400).json({ error: 'El email ya está registrado' });
+  }
+  
+  // Solo Yocelyn Rugerio puede registrarse como director o administrador
+  if ((role === 'director' || role === 'administrator') &&
+      !(name === 'Yocelyn Rugerio' && email === 'yocelyn.rugerio@globalpayments.com')) {
+    return res.status(403).json({ error: 'No tienes permiso para registrarte con este rol.' });
   }
   
   const hashedPassword = await bcrypt.hash(password, 10);
@@ -741,7 +742,7 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
     const worksheet = workbook.Sheets[sheetName];
     const data = xlsx.utils.sheet_to_json(worksheet);
 
-    if (data.length === 0) {
+    if (data.length === 0 && workbook.SheetNames.length <= 1) {
       return res.status(400).json({ error: 'El archivo Excel está vacío' });
     }
 
@@ -836,7 +837,7 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
           });
         } else {
           // Crear nuevo usuario con contraseña temporal
-          const tempPassword = 'Temporal123!';
+          const tempPassword = '123456';
           const hashedPassword = await bcrypt.hash(tempPassword, 10);
           
           const newUser = {
@@ -859,7 +860,7 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
             email,
             name,
             action: 'creado',
-            tempPassword: 'Temporal123!'
+            tempPassword: '123456'
           });
         }
       } catch (error) {
@@ -868,6 +869,98 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
           email: row['Email'] || 'N/A',
           error: error.message
         });
+      }
+    }
+
+    // Procesar hoja de Solicitudes (si existe)
+    // Buscar hoja por nombre exacto o parcial
+    const solicitudesSheetName = workbook.SheetNames.find(s => s === 'Solicitudes' || s.includes('Solicitud'));
+    const solicitudesSheet = solicitudesSheetName ? workbook.Sheets[solicitudesSheetName] : null;
+    const requestResults = { imported: 0, skipped: 0, errors: [] };
+
+    if (solicitudesSheet) {
+      const solicitudesData = xlsx.utils.sheet_to_json(solicitudesSheet);
+
+      const typeNamesReverse = {
+        'Vacaciones': 'vacation', 'PTO': 'pto', 'Matrimonio': 'marriage',
+        'Maternidad': 'maternity', 'Paternidad': 'paternity', 'Cumpleaños': 'birthday',
+        'Fallecimiento directo': 'death-immediate', 'Fallecimiento familiar': 'death-family',
+        'Fallecimiento mascota': 'pet-death', 'Incapacidad IMSS': 'medical-leave',
+        'Permiso Especial': 'special'
+      };
+      const statusNamesReverse = {
+        'Pendiente': 'pending', 'Aprobada': 'approved', 'Rechazada': 'rejected'
+      };
+
+      for (let i = 0; i < solicitudesData.length; i++) {
+        const row = solicitudesData[i];
+        const rowNum = i + 2;
+
+        try {
+          const empleadoName = row['Empleado'];
+          const tipo = row['Tipo'];
+          let fechaInicio = row['Fecha Inicio'];
+          let fechaFin = row['Fecha Fin'];
+          const dias = parseInt(row['Días']) || 0;
+          const estado = row['Estado'];
+
+          if (!empleadoName || !tipo || !fechaInicio || !fechaFin) {
+            requestResults.errors.push({ row: rowNum, error: `Solicitud incompleta en fila ${rowNum}` });
+            continue;
+          }
+
+          // Convertir fechas Excel numéricas
+          if (typeof fechaInicio === 'number') {
+            const d = xlsx.SSF.parse_date_code(fechaInicio);
+            fechaInicio = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+          }
+          if (typeof fechaFin === 'number') {
+            const d = xlsx.SSF.parse_date_code(fechaFin);
+            fechaFin = `${d.y}-${String(d.m).padStart(2, '0')}-${String(d.d).padStart(2, '0')}`;
+          }
+
+          // Buscar usuario por nombre
+          const user = db.users.find(u => u.name === empleadoName);
+          if (!user) {
+            requestResults.errors.push({ row: rowNum, error: `Usuario "${empleadoName}" no encontrado` });
+            continue;
+          }
+
+          const type = typeNamesReverse[tipo] || tipo;
+          const status = statusNamesReverse[estado] || estado;
+
+          // Verificar si ya existe solicitud con mismas fechas para ese usuario
+          const duplicate = db.requests.find(r =>
+            r.userId === user.id &&
+            r.startDate === fechaInicio &&
+            r.endDate === fechaFin &&
+            r.type === type
+          );
+
+          if (duplicate) {
+            requestResults.skipped++;
+            continue;
+          }
+
+          db.requests.push({
+            id: uuidv4(),
+            userId: user.id,
+            userName: user.name,
+            userRole: user.role,
+            type,
+            startDate: fechaInicio,
+            endDate: fechaFin,
+            days: dias,
+            status,
+            comments: row['Comentarios'] || 'Importado desde Excel',
+            backfill: true,
+            createdAt: new Date().toISOString()
+          });
+
+          requestResults.imported++;
+        } catch (error) {
+          requestResults.errors.push({ row: rowNum, error: error.message });
+        }
       }
     }
 
@@ -880,14 +973,111 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
         total: data.length,
         created: results.created.length,
         updated: results.updated.length,
-        errors: results.errors.length
+        errors: results.errors.length,
+        requestsImported: requestResults.imported,
+        requestsSkipped: requestResults.skipped,
+        requestErrors: requestResults.errors.length,
+        solicitudesSheetFound: !!solicitudesSheet
       },
-      details: results
+      details: {
+        ...results,
+        requestErrors: requestResults.errors
+      }
     });
 
   } catch (error) {
     console.error('Error en carga masiva:', error);
     res.status(500).json({ error: 'Error al procesar el archivo: ' + error.message });
+  }
+});
+
+// Exportar datos a Excel (admin)
+app.get('/api/admin/export-excel', (req, res) => {
+  try {
+    const { userRole } = req.query;
+    if (userRole !== 'administrator') {
+      return res.status(403).json({ error: 'Acceso denegado' });
+    }
+
+    const db = readDB();
+
+    // Hoja 1: Empleados (formato compatible con importación)
+    const employeesData = db.users.map(u => {
+      let vacTotal = 0, vacUsed = 0, ptoUsed = 0;
+      if (u.hireDate) {
+        const { periodStart, periodEnd } = getCurrentVacationPeriod(u.hireDate);
+        vacTotal = calculateVacationDays(u.hireDate);
+        vacUsed = db.requests
+          .filter(r => r.userId === u.id && r.type === 'vacation' &&
+            (r.status === 'approved' || r.status === 'pending') &&
+            r.startDate >= periodStart && r.startDate <= periodEnd)
+          .reduce((sum, r) => sum + r.days, 0);
+        ptoUsed = db.requests
+          .filter(r => r.userId === u.id && r.type === 'pto' &&
+            (r.status === 'approved' || r.status === 'pending') &&
+            r.startDate >= periodStart && r.startDate <= periodEnd)
+          .reduce((sum, r) => sum + r.days, 0);
+      }
+
+      return {
+        'Nombre': u.name,
+        'Email': u.email,
+        'Equipo': u.team,
+        'Fecha de Ingreso': u.hireDate || '',
+        'Rol': u.role,
+        'Vacaciones Totales': vacTotal,
+        'Vacaciones Usadas': vacUsed,
+        'PTO Usados': ptoUsed
+      };
+    });
+
+    // Hoja 2: Solicitudes
+    const typeNames = {
+      vacation: 'Vacaciones', pto: 'PTO', marriage: 'Matrimonio',
+      maternity: 'Maternidad', paternity: 'Paternidad', birthday: 'Cumpleaños',
+      'death-immediate': 'Fallecimiento directo', 'death-family': 'Fallecimiento familiar',
+      'pet-death': 'Fallecimiento mascota', 'medical-leave': 'Incapacidad IMSS',
+      special: 'Permiso Especial'
+    };
+    const statusNames = { pending: 'Pendiente', approved: 'Aprobada', rejected: 'Rechazada' };
+
+    const requestsData = db.requests.map(r => ({
+      'Empleado': r.userName,
+      'Tipo': typeNames[r.type] || r.type,
+      'Fecha Inicio': r.startDate,
+      'Fecha Fin': r.endDate,
+      'Días': r.days,
+      'Estado': statusNames[r.status] || r.status,
+      'Comentarios': r.comments || '',
+      'Fecha Creación': r.createdAt ? r.createdAt.split('T')[0] : ''
+    }));
+
+    const wb = xlsx.utils.book_new();
+    const wsEmpleados = xlsx.utils.json_to_sheet(employeesData);
+    const wsSolicitudes = xlsx.utils.json_to_sheet(requestsData);
+
+    // Ajustar ancho de columnas
+    wsEmpleados['!cols'] = [
+      { wch: 30 }, { wch: 30 }, { wch: 20 }, { wch: 15 },
+      { wch: 15 }, { wch: 18 }, { wch: 18 }, { wch: 12 }
+    ];
+    wsSolicitudes['!cols'] = [
+      { wch: 30 }, { wch: 20 }, { wch: 15 }, { wch: 15 },
+      { wch: 8 }, { wch: 12 }, { wch: 30 }, { wch: 15 }
+    ];
+
+    xlsx.utils.book_append_sheet(wb, wsEmpleados, 'Empleados');
+    xlsx.utils.book_append_sheet(wb, wsSolicitudes, 'Solicitudes');
+
+    const buffer = xlsx.write(wb, { type: 'buffer', bookType: 'xlsx' });
+
+    const filename = `vacation-manager-${new Date().toISOString().split('T')[0]}.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error en exportación Excel:', error);
+    res.status(500).json({ error: 'Error al exportar datos: ' + error.message });
   }
 });
 
