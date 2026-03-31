@@ -13,6 +13,38 @@ let allRequests = [];
 let calendar = null;
 let holidays = [];
 
+function normalizeId(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value.$oid) return String(value.$oid);
+  return String(value);
+}
+
+function normalizeDateString(value) {
+  if (!value) return '';
+  if (typeof value === 'string') {
+    // Mongo suele regresar ISO: 2026-04-01T00:00:00.000Z
+    // Para los inputs/render del frontend usamos YYYY-MM-DD.
+    return value.includes('T') ? value.split('T')[0] : value;
+  }
+  try {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return '';
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    return '';
+  }
+}
+
+if (currentUser) {
+  currentUser.id = normalizeId(currentUser.id || currentUser._id);
+  currentUser._id = normalizeId(currentUser._id || currentUser.id);
+  currentUser.hireDate = normalizeDateString(currentUser.hireDate);
+}
+
 // ==================== INITIALIZATION ====================
 document.addEventListener('DOMContentLoaded', () => {
   initializeApp();
@@ -130,7 +162,15 @@ async function loadUsers() {
     });
     
     const response = await fetch(`/api/users?${params}`);
-    allUsers = await response.json();
+    const rawUsers = await response.json();
+    allUsers = rawUsers.map(user => ({
+      ...user,
+      id: normalizeId(user.id || user._id),
+      _id: normalizeId(user._id || user.id),
+      hireDate: normalizeDateString(user.hireDate),
+      currentPeriodStart: normalizeDateString(user.currentPeriodStart),
+      currentPeriodEnd: normalizeDateString(user.currentPeriodEnd)
+    }));
   } catch (error) {
     console.error('Error loading users:', error);
   }
@@ -145,7 +185,18 @@ async function loadRequestsData() {
     });
     
     const response = await fetch(`/api/requests?${params}`);
-    allRequests = await response.json();
+    const rawRequests = await response.json();
+    allRequests = rawRequests.map(req => ({
+      ...req,
+      id: normalizeId(req.id || req._id),
+      _id: normalizeId(req._id || req.id),
+      userId: normalizeId(req.userId),
+      approverId: normalizeId(req.approverId),
+      startDate: normalizeDateString(req.startDate),
+      endDate: normalizeDateString(req.endDate),
+      createdAt: normalizeDateString(req.createdAt),
+      updatedAt: normalizeDateString(req.updatedAt)
+    }));
   } catch (error) {
     console.error('Error loading requests:', error);
   }

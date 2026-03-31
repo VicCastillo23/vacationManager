@@ -1,70 +1,53 @@
 #!/usr/bin/env node
 
 /**
- * Script para resetear contraseñas de usuarios a Password123!
+ * Script para resetear contraseñas de usuarios en MongoDB a Temporal123!
  * Uso: node scripts/reset-passwords.js
  */
 
 require('dotenv').config();
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
-
-const ENV = process.env.NODE_ENV || 'production';
-const DB_FILE = ENV === 'test' ? 'db-test.json' : 'db.json';
-const DB_PATH = path.join(__dirname, '..', 'data', DB_FILE);
-const ALGORITHM = 'aes-256-cbc';
-const ENCRYPTION_KEY = crypto.createHash('sha256').update(process.env.ENCRYPTION_KEY || 'default-key-change-in-production').digest();
-const IV_LENGTH = 16;
-
-function decrypt(text) {
-  const parts = text.split(':');
-  const iv = Buffer.from(parts.shift(), 'hex');
-  const encryptedText = parts.join(':');
-  const decipher = crypto.createDecipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
-}
-
-function encrypt(text) {
-  const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, ENCRYPTION_KEY, iv);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return iv.toString('hex') + ':' + encrypted;
-}
+const { connectDB, disconnectDB } = require('../lib/database');
+const User = require('../models/User');
 
 async function resetPasswords() {
+  const NEW_PASSWORD = 'Temporal123!';
+
   try {
-    console.log('📖 Leyendo base de datos encriptada...');
-    const encryptedData = fs.readFileSync(DB_PATH, 'utf8');
-    const decryptedData = decrypt(encryptedData);
-    const db = JSON.parse(decryptedData);
-    
-    console.log('🔑 Generando nuevo hash para Password123!...');
-    const newPasswordHash = await bcrypt.hash('Password123!', 10);
-    
-    console.log('✏️  Actualizando contraseñas...');
-    let updated = 0;
-    for (let user of db.users) {
-      user.password = newPasswordHash;
-      user.mustChangePassword = false;
-      updated++;
+    console.log('📦 Conectando a MongoDB...');
+    await connectDB();
+
+    const totalUsers = await User.countDocuments({});
+    if (totalUsers === 0) {
+      console.log('⚠️  No hay usuarios para actualizar.');
+      await disconnectDB();
+      return;
     }
-    
-    console.log('💾 Guardando base de datos encriptada...');
-    const jsonData = JSON.stringify(db, null, 2);
-    const encryptedNewData = encrypt(jsonData);
-    fs.writeFileSync(DB_PATH, encryptedNewData, 'utf8');
-    
-    console.log(`\n✅ ¡${updated} contraseñas actualizadas exitosamente!`);
-    console.log('   Nueva contraseña para todos los usuarios: Password123!\n');
-    
+
+    console.log('🔑 Generando hash para Temporal123!...');
+    const newPasswordHash = await bcrypt.hash(NEW_PASSWORD, 10);
+
+    console.log('✏️  Actualizando usuarios...');
+    const result = await User.updateMany(
+      {},
+      {
+        $set: {
+          password: newPasswordHash,
+          mustChangePassword: true
+        }
+      }
+    );
+
+    console.log(`\n✅ ¡${result.modifiedCount} usuario(s) actualizados en MongoDB!`);
+    console.log(`   Nueva contraseña para todos los usuarios: ${NEW_PASSWORD}`);
+    console.log('   Todos los usuarios deberán cambiarla en el siguiente inicio de sesión.\n');
+
+    await disconnectDB();
   } catch (error) {
     console.error('❌ Error al resetear contraseñas:', error.message);
-    console.error(error);
+    try {
+      await disconnectDB();
+    } catch (_) {}
     process.exit(1);
   }
 }

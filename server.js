@@ -2,10 +2,13 @@ require('dotenv').config();
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 const multer = require('multer');
 const xlsx = require('xlsx');
 const { connectDB, disconnectDB } = require('./lib/database');
 const { calculateVacationDays, calculateYearsOfService, getCurrentVacationPeriod, getNthWeekdayOfMonth, getEasterDates, getMexicanHolidays2026, isHoliday, getHolidayName } = require('./lib/helpers');
+const { authenticate, authorize, authorizeSelfOr, authorizeTeamOr } = require('./lib/auth');
 const User = require('./models/User');
 const Request = require('./models/Request');
 
@@ -15,6 +18,7 @@ const PORT = process.env.PORT || (ENV === 'test' ? 3001 : 3000);
 
 // Middleware
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.static('public'));
 
 // Configuración de multer para subida de archivos
@@ -42,6 +46,21 @@ app.post('/api/auth/login', async (req, res) => {
   if (!validPassword) {
     return res.status(401).json({ error: 'Contraseña incorrecta' });
   }
+
+  // Crear JWT token para toda sesión válida (incluye flujo de cambio obligatorio)
+  const token = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    process.env.JWT_SECRET || 'vacation-manager-secret-key',
+    { expiresIn: '24h' }
+  );
+
+  // Setear cookie HTTP-only
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000 // 24 hours
+  });
   
   console.log(`Login: ${user.email}, mustChangePassword: ${user.mustChangePassword}`);
   
@@ -52,14 +71,15 @@ app.post('/api/auth/login', async (req, res) => {
       mustChangePassword: true,
       userId: user.id,
       email: user.email,
-      name: user.name
+      name: user.name,
+      token
     });
   }
   
   console.log('Sending normal user response');
   
   // El schema de User ya excluye password en toJSON
-  res.json({ user: user });
+  res.json({ user: user, token });
 });
 
 // Registro
@@ -115,27 +135,38 @@ app.post('/api/auth/change-password', async (req, res) => {
   user.password = hashedPassword;
   user.mustChangePassword = false;
   await user.save();
+
+  // Emitir/renovar sesión al completar el cambio de contraseña
+  const token = jwt.sign(
+    { userId: user.id, email: user.email, role: user.role },
+    process.env.JWT_SECRET || 'vacation-manager-secret-key',
+    { expiresIn: '24h' }
+  );
+  res.cookie('token', token, {
+    httpOnly: true,
+    secure: ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000
+  });
   
-  res.json({ user: user });
+  res.json({ user: user, token });
 });
 
 // ==================== USERS ROUTES ====================
 
 // Obtener todos los usuarios (según rol)
-app.get('/api/users', async (req, res) => {
-  const { userId, role, team } = req.query;
-  
+app.get('/api/users', authenticate, async (req, res) => {
   try {
     let query = {};
     
-    if (role === 'employee') {
+    if (req.user.role === 'employee') {
       // Empleado ve solo su info
-      query._id = userId;
-    } else if (role === 'manager') {
+      query._id = req.user._id;
+    } else if (req.user.role === 'manager') {
       // Manager ve su equipo + sí mismo
       query.$or = [
-        { team },
-        { _id: userId }
+        { team: req.user.team },
+        { _id: req.user._id }
       ];
     }
     // Director y Administrador ven todos (query vacía)
@@ -205,12 +236,19 @@ app.get('/api/users', async (req, res) => {
 });
 
 // Obtener un usuario
-app.get('/api/users/:id', async (req, res) => {
+app.get('/api/users/:id', authenticate, async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
     
     if (!user) {
       return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const isSelf = user._id.toString() === req.user._id.toString();
+    const isAdminOrDirector = req.user.role === 'administrator' || req.user.role === 'director';
+    const isManagerAndSameTeam = req.user.role === 'manager' && user.team === req.user.team;
+    if (!isSelf && !isAdminOrDirector && !isManagerAndSameTeam) {
+      return res.status(403).json({ error: 'No autorizado para ver este usuario' });
     }
     
     res.json(user);
@@ -221,14 +259,9 @@ app.get('/api/users/:id', async (req, res) => {
 });
 
 // Actualizar usuario (solo administradores)
-app.put('/api/users/:id', async (req, res) => {
+app.put('/api/users/:id', authenticate, authorize('administrator'), async (req, res) => {
   try {
     const { requestingUserRole, ...updates } = req.body;
-    
-    // Validar que solo administradores puedan actualizar usuarios
-    if (requestingUserRole !== 'administrator') {
-      return res.status(403).json({ error: 'Solo los administradores pueden editar usuarios' });
-    }
     
     // Campos que no deben modificarse
     delete updates.id;
@@ -288,19 +321,24 @@ app.get('/api/holidays', (req, res) => {
 // ==================== REQUESTS (SOLICITUDES) ROUTES ====================
 
 // Obtener solicitudes (según rol)
-app.get('/api/requests', async (req, res) => {
-  const { userId, role, team } = req.query;
+app.get('/api/requests', authenticate, async (req, res) => {
+  const { team } = req.query;
   
   try {
     let query = {};
     
-    if (role === 'employee') {
+    if (req.user.role === 'employee') {
       // Empleado ve solo sus solicitudes
-      query.userId = userId;
-    } else if (role === 'manager') {
-      // Manager ve solicitudes de su equipo + las propias
-      const teamUserIds = await User.find({ team }).distinct('_id');
-      query.userId = { $in: [...teamUserIds, userId] };
+      query.userId = req.user.id;
+    } else if (req.user.role === 'manager') {
+      // Manager ve solicitudes de su equipo
+      const teamUserIds = await User.find({ team: req.user.team, role: 'employee' }).distinct('_id');
+      query = {
+        $or: [
+          { userId: req.user.id },
+          { userId: { $in: teamUserIds } }
+        ]
+      };
     }
     // Director y Administrador ven todas (query vacía)
     
@@ -314,32 +352,43 @@ app.get('/api/requests', async (req, res) => {
 });
 
 // Crear solicitud
-app.post('/api/requests', async (req, res) => {
-  const { userId, userName, userRole, type, startDate, endDate, days, comments } = req.body;
+app.post('/api/requests', authenticate, async (req, res) => {
+  // Solo employees pueden crear solicitudes (verificado por authenticate middleware)
+  const { userName, userRole, type, startDate, endDate, days, comments } = req.body;
+  const userId = req.user.id; // userId viene del token
+  
+  if (req.user.role !== 'employee') {
+    return res.status(403).json({ error: 'Solo los empleados pueden crear solicitudes' });
+  }
   
   try {
-    // Validación de 3 días de anticipación (solo para vacaciones y PTO)
-    if (type === 'vacation' || type === 'pto') {
-      const start = new Date(startDate);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const diffDays = Math.ceil((start - today) / (1000 * 60 * 60 * 24));
-      
+    //.Validar fechas
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Las fechas de inicio y fin son obligatorias' });
+    }
+
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (start > end) {
+      return res.status(400).json({ error: 'La fecha de inicio debe ser anterior o igual a la fecha de fin' });
+    }
+
+    // Validación de 3 días de anticipación para vacaciones/PTO
+    if ((type === 'vacation' || type === 'pto') && type !== 'special'){
+      const todayLocal = new Date();
+      todayLocal.setHours(0,0,0,0);
+      const diffDays = Math.ceil((start - todayLocal) / (1000 * 60 * 60 * 24));
       if (diffDays < 3) {
-        return res.status(400).json({ 
-          error: 'Las solicitudes de vacaciones y días personales deben hacerse con al menos 3 días de anticipación'
-        });
+        return res.status(400).json({ error: 'Las solicitudes de vacaciones y días personales deben hacerse con al menos 3 días de anticipación' });
       }
     }
-    
+
     // Validar que PTO no sea de más de 2 días
     if (type === 'pto' && parseInt(days) > 2) {
-      return res.status(400).json({ 
-        error: 'Las solicitudes de PTO no pueden ser de más de 2 días laborables seguidos'
-      });
+      return res.status(400).json({ error: 'Las solicitudes de PTO por día no pueden ser de más de 2 días' });
     }
-    
-    // Validar días específicos según tipo de ausencia
+
+    // Valida días específicos según tipo
     const validDaysMap = {
       'marriage': 5,
       'maternity': 84,
@@ -349,17 +398,20 @@ app.post('/api/requests', async (req, res) => {
       'death-family': 3,
       'pet-death': 1
     };
-    
     if (validDaysMap[type] && parseInt(days) > validDaysMap[type]) {
-      return res.status(400).json({ 
-        error: `Este tipo de ausencia permite máximo ${validDaysMap[type]} días`
-      });
+      return res.status(400).json({ error: `Este tipo de ausencia permite máximo ${validDaysMap[type]} días` });
     }
-    
-    // Verificar empalmes con solicitudes existentes (pendientes o aprobadas)
+
+    // Verificar que rango de request está dentro del período de vacaciones actual
+    const { periodStart, periodEnd } = getCurrentVacationPeriod(req.user.hireDate);
     const newStart = new Date(startDate);
     const newEnd = new Date(endDate);
-    
+
+    if (newStart < periodStart || newEnd > periodEnd) {
+      return res.status(400).json({ error: 'Solicitud fuera de período de vacaciones' });
+    }
+
+    // Verificar empalmes con solicitudes existentes (pendientes o aprobadas)
     const overlap = await Request.findOne({
       userId,
       status: { $in: ['pending', 'approved'] },
@@ -367,30 +419,27 @@ app.post('/api/requests', async (req, res) => {
         { startDate: { $lte: newEnd }, endDate: { $gte: newStart } }
       ]
     });
-    
+
     if (overlap) {
       return res.status(400).json({ 
         error: 'Las fechas se empalman con una solicitud existente',
         conflictWith: overlap
       });
     }
-    
+
     const newRequest = new Request({
       userId,
-      userName,
-      userRole,
+      userName: userName || req.user.name,
+      userRole: req.user.role,
       type,
-      startDate: new Date(startDate),
-      endDate: new Date(endDate),
+      startDate: start,
+      endDate: end,
       days: parseInt(days),
       status: 'pending',
-      approverId: null,
-      approverName: null,
       comments: comments || ''
     });
-    
+
     await newRequest.save();
-    
     res.json(newRequest);
   } catch (error) {
     console.error('Error al crear solicitud:', error);
@@ -399,19 +448,29 @@ app.post('/api/requests', async (req, res) => {
 });
 
 // Aprobar/Rechazar solicitud
-app.put('/api/requests/:id', async (req, res) => {
+app.put('/api/requests/:id', authenticate, authorize('manager', 'director', 'administrator'), async (req, res) => {
   const { status, approverId, approverName } = req.body;
+  const requestId = req.params.id;
   
   try {
-    const request = await Request.findById(req.params.id);
+    const request = await Request.findById(requestId);
     
     if (!request) {
       return res.status(404).json({ error: 'Solicitud no encontrada' });
     }
     
+    // Validar permisos según rol
+    if (req.user.role === 'manager') {
+      // Manager solo puede aprobar/rechazar de su equipo
+      const requestUser = await User.findById(request.userId);
+      if (!requestUser || requestUser.team !== req.user.team) {
+        return res.status(403).json({ error: 'No autorizado: solo puedes aprobar solicitudes de tu equipo' });
+      }
+    }
+    
     request.status = status;
-    request.approverId = approverId;
-    request.approverName = approverName;
+    request.approverId = req.user.id; // Usar userId del token auth
+    request.approverName = req.user.name;
     request.updatedAt = new Date();
     
     await request.save();
@@ -424,15 +483,29 @@ app.put('/api/requests/:id', async (req, res) => {
 });
 
 // Eliminar solicitud
-app.delete('/api/requests/:id', async (req, res) => {
+app.delete('/api/requests/:id', authenticate, async (req, res) => {
+  const requestId = req.params.id;
+  
   try {
-    const request = await Request.findById(req.params.id);
+    const request = await Request.findById(requestId);
     
     if (!request) {
       return res.status(404).json({ error: 'Solicitud no encontrada' });
     }
     
-    await Request.findByIdAndDelete(req.params.id);
+    // Validar permisos
+    if (request.userId.toString() !== req.user.id.toString() && !['manager', 'director', 'administrator'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'No autorizado: solo puedes eliminar tus propias solicitudes' });
+    }
+    
+    if (req.user.role === 'manager') {
+      const requestUser = await User.findById(request.userId);
+      if (!requestUser || requestUser.team !== req.user.team) {
+        return res.status(403).json({ error: 'No autorizado: no puedes eliminar solicitudes fuera de tu equipo' });
+      }
+    }
+    
+    await Request.findByIdAndDelete(requestId);
     
     res.json({ message: 'Solicitud eliminada' });
   } catch (error) {
@@ -444,14 +517,9 @@ app.delete('/api/requests/:id', async (req, res) => {
 // ==================== ADMIN ROUTES ====================
 
 // Llenado previo de vacaciones pasadas (backfill)
-app.post('/api/requests/backfill', async (req, res) => {
+app.post('/api/requests/backfill', authenticate, authorize('administrator'), async (req, res) => {
   try {
     const { userId, userName, entries, requestingUserRole, approverId, approverName } = req.body;
-    
-    // Solo administradores pueden hacer backfill
-    if (requestingUserRole !== 'administrator') {
-      return res.status(403).json({ error: 'Solo los administradores pueden registrar vacaciones previas' });
-    }
     
     if (!entries || entries.length === 0) {
       return res.status(400).json({ error: 'No se proporcionaron entradas' });
@@ -569,9 +637,21 @@ app.post('/api/requests/backfill', async (req, res) => {
 // Carga masiva de empleados desde Excel
 app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
   try {
-    // Verificar que el usuario es administrador
-    const { userRole } = req.body;
-    if (userRole !== 'administrator') {
+    // Verificar que el usuario es administrador autenticado
+    const token = req.cookies?.token || req.query?.token;
+    if (!token) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'vacation-manager-secret-key');
+    } catch (error) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+
+    const actor = await User.findById(decoded.userId);
+    if (!actor || actor.role !== 'administrator') {
       return res.status(403).json({ error: 'Acceso denegado. Solo administradores pueden realizar esta acción.' });
     }
 
@@ -826,8 +906,20 @@ app.post('/api/admin/bulk-upload', upload.single('file'), async (req, res) => {
 // Exportar datos a Excel (admin)
 app.get('/api/admin/export-excel', async (req, res) => {
   try {
-    const { userRole } = req.query;
-    if (userRole !== 'administrator') {
+    const token = req.cookies?.token || req.query?.token;
+    if (!token) {
+      return res.status(401).json({ error: 'No autenticado' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || 'vacation-manager-secret-key');
+    } catch (error) {
+      return res.status(401).json({ error: 'Token inválido' });
+    }
+
+    const actor = await User.findById(decoded.userId);
+    if (!actor || actor.role !== 'administrator') {
       return res.status(403).json({ error: 'Acceso denegado' });
     }
 
