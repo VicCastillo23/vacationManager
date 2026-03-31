@@ -39,6 +39,12 @@ function normalizeDateString(value) {
   }
 }
 
+function isManagedByCurrentUser(user) {
+  if (!user || currentUser.role !== 'manager') return false;
+  const userManagerId = normalizeId(user.managerId);
+  return userManagerId && userManagerId === currentUser.id;
+}
+
 if (currentUser) {
   currentUser.id = normalizeId(currentUser.id || currentUser._id);
   currentUser._id = normalizeId(currentUser._id || currentUser.id);
@@ -283,9 +289,10 @@ function showPendingApprovals() {
       // Directors and Administrators approve manager/employee requests
       return r.userRole === 'manager' || r.userRole === 'employee';
     } else if (currentUser.role === 'manager') {
-      // Managers approve employee requests in their team
+      // Managers approve direct reports (fallback: same team employee)
       const requestUser = allUsers.find(u => u.id === r.userId);
-      return requestUser && requestUser.team === currentUser.team && r.userRole === 'employee';
+      if (!requestUser || r.userRole !== 'employee') return false;
+      return isManagedByCurrentUser(requestUser) || requestUser.team === currentUser.team;
     }
     return false;
   });
@@ -417,9 +424,10 @@ function canUserApprove(request) {
   if (currentUser.role === 'director' || currentUser.role === 'administrator') {
     return true; // Directors and Administrators can approve all
   } else if (currentUser.role === 'manager') {
-    // Managers can approve employee requests in their team
+    // Managers can approve direct reports (fallback: same team employee)
     const requestUser = allUsers.find(u => u.id === request.userId);
-    return requestUser && requestUser.team === currentUser.team && request.userRole === 'employee';
+    if (!requestUser || request.userRole !== 'employee') return false;
+    return isManagedByCurrentUser(requestUser) || requestUser.team === currentUser.team;
   }
   return false;
 }
@@ -795,10 +803,12 @@ function getCalendarEvents() {
     // Director and Administrator see all requests
     requestsToShow = allRequests.filter(r => r.status === 'approved' || r.status === 'pending');
   } else if (currentUser.role === 'manager') {
-    // Manager sees their team's requests + their own
-    const teamUserIds = allUsers.filter(u => u.team === currentUser.team).map(u => u.id);
+    // Manager sees direct reports + fallback by same team + own requests
+    const visibleEmployeeIds = allUsers
+      .filter(u => u.role === 'employee' && (isManagedByCurrentUser(u) || u.team === currentUser.team))
+      .map(u => u.id);
     requestsToShow = allRequests.filter(r => 
-      (teamUserIds.includes(r.userId) || r.userId === currentUser.id) &&
+      (visibleEmployeeIds.includes(r.userId) || r.userId === currentUser.id) &&
       (r.status === 'approved' || r.status === 'pending')
     );
   } else {

@@ -32,6 +32,13 @@ const upload = multer({
 
 const MEXICAN_HOLIDAYS_2026 = getMexicanHolidays2026();
 
+function isDirectReport(userDoc, managerDoc) {
+  if (!userDoc || !managerDoc) return false;
+  const managerId = (managerDoc.id || managerDoc._id || '').toString();
+  const userManagerId = (userDoc.managerId || '').toString();
+  return !!managerId && !!userManagerId && userManagerId === managerId;
+}
+
 function getCookieOptions(req) {
   const forwardedProto = (req.headers['x-forwarded-proto'] || '').toString().toLowerCase();
   const isHttps = req.secure || forwardedProto.includes('https');
@@ -176,10 +183,12 @@ app.get('/api/users', authenticate, async (req, res) => {
       // Empleado ve solo su info
       query._id = req.user._id;
     } else if (req.user.role === 'manager') {
-      // Manager ve su equipo + sí mismo
+      // Manager ve sus reportes directos + fallback por equipo + sí mismo
+      const directReportIds = await User.find({ managerId: req.user.id }).distinct('_id');
       query.$or = [
-        { team: req.user.team },
-        { _id: req.user._id }
+        { _id: req.user._id },
+        { _id: { $in: directReportIds } },
+        { team: req.user.team, role: 'employee' }
       ];
     }
     // Director y Administrador ven todos (query vacía)
@@ -344,12 +353,14 @@ app.get('/api/requests', authenticate, async (req, res) => {
       // Empleado ve solo sus solicitudes
       query.userId = req.user.id;
     } else if (req.user.role === 'manager') {
-      // Manager ve solicitudes de su equipo
+      // Manager ve solicitudes de sus reportes directos + fallback por equipo + las propias
+      const directReportIds = await User.find({ managerId: req.user.id }).distinct('_id');
       const teamUserIds = await User.find({ team: req.user.team, role: 'employee' }).distinct('_id');
+      const visibleUserIds = [...new Set([...directReportIds, ...teamUserIds].map(id => id.toString()))];
       query = {
         $or: [
           { userId: req.user.id },
-          { userId: { $in: teamUserIds } }
+          { userId: { $in: visibleUserIds } }
         ]
       };
     }
@@ -474,10 +485,13 @@ app.put('/api/requests/:id', authenticate, authorize('manager', 'director', 'adm
     
     // Validar permisos según rol
     if (req.user.role === 'manager') {
-      // Manager solo puede aprobar/rechazar de su equipo
+      // Manager solo puede aprobar/rechazar reportes directos
+      // (con fallback por equipo para compatibilidad de datos legacy)
       const requestUser = await User.findById(request.userId);
-      if (!requestUser || requestUser.team !== req.user.team) {
-        return res.status(403).json({ error: 'No autorizado: solo puedes aprobar solicitudes de tu equipo' });
+      const sameTeamEmployee = requestUser && requestUser.team === req.user.team && requestUser.role === 'employee';
+      const directReport = isDirectReport(requestUser, req.user);
+      if (!requestUser || (!sameTeamEmployee && !directReport)) {
+        return res.status(403).json({ error: 'No autorizado: solo puedes aprobar solicitudes de tus reportes directos' });
       }
     }
     
@@ -513,8 +527,10 @@ app.delete('/api/requests/:id', authenticate, async (req, res) => {
     
     if (req.user.role === 'manager') {
       const requestUser = await User.findById(request.userId);
-      if (!requestUser || requestUser.team !== req.user.team) {
-        return res.status(403).json({ error: 'No autorizado: no puedes eliminar solicitudes fuera de tu equipo' });
+      const sameTeamEmployee = requestUser && requestUser.team === req.user.team && requestUser.role === 'employee';
+      const directReport = isDirectReport(requestUser, req.user);
+      if (!requestUser || (!sameTeamEmployee && !directReport)) {
+        return res.status(403).json({ error: 'No autorizado: no puedes eliminar solicitudes fuera de tus reportes directos' });
       }
     }
     
