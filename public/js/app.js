@@ -737,7 +737,9 @@ function initializeCalendar() {
       month: 'Mes',
       week: 'Semana'
     },
-    events: getCalendarEvents(),
+    events: function(_fetchInfo, successCallback) {
+      successCallback(getCalendarEvents());
+    },
     eventClick: function(info) {
       const event = info.event;
       const props = event.extendedProps;
@@ -760,7 +762,7 @@ function getCalendarEvents() {
     // Add background color for the full day
     events.push({
       start: h.date,
-      end: h.date,
+      end: addOneDay(h.date),
       allDay: true,
       display: 'background',
       backgroundColor: '#fef3c7',
@@ -841,8 +843,7 @@ function addOneDay(dateStr) {
 
 function refreshCalendar() {
   if (calendar) {
-    calendar.removeAllEvents();
-    calendar.addEventSource(getCalendarEvents());
+    calendar.refetchEvents();
   }
 }
 
