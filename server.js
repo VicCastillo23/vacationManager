@@ -15,6 +15,7 @@ const Request = require('./models/Request');
 const app = express();
 const ENV = process.env.NODE_ENV || 'production';
 const PORT = process.env.PORT || (ENV === 'test' ? 3001 : 3000);
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(express.json());
@@ -30,6 +31,28 @@ const upload = multer({
 // ==================== HELPER FUNCTIONS ====================
 
 const MEXICAN_HOLIDAYS_2026 = getMexicanHolidays2026();
+
+function getCookieOptions(req) {
+  const forwardedProto = (req.headers['x-forwarded-proto'] || '').toString().toLowerCase();
+  const isHttps = req.secure || forwardedProto.includes('https');
+  const explicitCookieSecure = process.env.COOKIE_SECURE;
+
+  // Default behavior:
+  // - production: secure only when request is HTTPS
+  // - non-production: not secure
+  let secure = ENV === 'production' ? isHttps : false;
+
+  // Allow explicit override with env var when needed.
+  if (explicitCookieSecure === 'true') secure = true;
+  if (explicitCookieSecure === 'false') secure = false;
+
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: 'strict',
+    maxAge: 24 * 60 * 60 * 1000
+  };
+}
 
 // ==================== AUTH ROUTES ====================
 
@@ -55,12 +78,7 @@ app.post('/api/auth/login', async (req, res) => {
   );
 
   // Setear cookie HTTP-only
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure: ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  });
+  res.cookie('token', token, getCookieOptions(req));
   
   console.log(`Login: ${user.email}, mustChangePassword: ${user.mustChangePassword}`);
   
@@ -142,12 +160,7 @@ app.post('/api/auth/change-password', async (req, res) => {
     process.env.JWT_SECRET || 'vacation-manager-secret-key',
     { expiresIn: '24h' }
   );
-  res.cookie('token', token, {
-    httpOnly: true,
-    secure: ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 24 * 60 * 60 * 1000
-  });
+  res.cookie('token', token, getCookieOptions(req));
   
   res.json({ user: user, token });
 });
